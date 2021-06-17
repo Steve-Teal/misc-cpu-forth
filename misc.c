@@ -16,6 +16,7 @@
 #include<string.h>
 
 #define RAM_SIZE    (32768)
+#define CTRL_C      (3)
 
 uint16_t ram[RAM_SIZE];
 uint16_t accu;
@@ -23,6 +24,7 @@ uint16_t sf;
 uint16_t zf;
 uint16_t cf;
 uint16_t pc;
+uint16_t key;
 
 void loadfile(char *fileName)
 {
@@ -37,6 +39,12 @@ void loadfile(char *fileName)
     {
         ram[index] = ram[index] >> 8 | ram[index] << 8;
     }
+}
+
+uint16_t getkey(void)
+{
+    key = getch()&0xff;
+    return key;
 }
 
 void writeAccu(uint16_t value)
@@ -54,12 +62,14 @@ uint16_t read(uint16_t address)
         case 1: return pc + 2;
         case 2: return pc + 4;
         case 3: return pc + 6;
+        case 7: return read(accu);
         case 8: return accu;
         case 9: return sf;
         case 10: return zf;
         case 12: return cf;
-        case 0xfffa: return getch()&0xff;
-        case 0xfffb: return kbhit()?7:5;
+        case 0xfffd: return 1;
+        case 0xfffe: return getkey();
+        case 0xffff: return kbhit()?1:0;
         default: break;
     }
 
@@ -102,6 +112,7 @@ void write(uint16_t address, uint16_t data)
         case 1: pc = sf?data:pc; return;
         case 2: pc = zf?data:pc; return;
         case 4: pc = cf?data:pc; return;
+        case 7: write(accu,data); return;
         case 8: writeAccu(data); return;
         case 9: writeAccu(sub(accu,data)); return;
         case 10: writeAccu(sub(data,accu)); return;
@@ -126,9 +137,11 @@ int main(void)
     uint16_t dst;
     uint16_t temp;
 
-    loadfile("kernel.bin");
+    loadfile("kernl-misc-0-7-3.fi");
+    key = 0;
     pc = 0x10; /* Program counter reset value */
-    while(1)
+    
+    while(key != CTRL_C)
     {
         src = ram[pc];
         dst = ram[pc+1];
@@ -136,6 +149,8 @@ int main(void)
         pc+=2;
         write(dst,temp);
     }
+
+    return 0;
 }
 
 /* End of file */
