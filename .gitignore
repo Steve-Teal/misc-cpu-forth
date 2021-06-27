@@ -50,3 +50,12 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# FPGA project directory
+fpga/
+max/
+
+# Quartus Files
+*.qip
+*.bak
+*.cmp

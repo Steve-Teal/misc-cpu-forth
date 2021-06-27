@@ -31,7 +31,6 @@ void loadfile(char *fileName)
     FILE *fp;
     int index;
 
-    memset(ram,0,sizeof(ram));
     fp = fopen(fileName,"rb");
     fread(ram,sizeof(uint16_t),RAM_SIZE,fp);
     fclose(fp);
@@ -67,9 +66,9 @@ uint16_t read(uint16_t address)
         case 9: return sf;
         case 10: return zf;
         case 12: return cf;
-        case 0xfffd: return 1;
+        //case 0xfffd: return 1;  Not used by kernel
         case 0xfffe: return getkey();
-        case 0xffff: return kbhit()?1:0;
+        //case 0xffff: return kbhit()?1:0;  Not used by kernel
         default: break;
     }
 
