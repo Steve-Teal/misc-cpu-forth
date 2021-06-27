@@ -1,10 +1,11 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 entity misc_forth is
 	port (
 		clk12m     : in std_logic;
-		--led      : out std_logic_vector(7 downto 0);
+		led      : out std_logic_vector(7 downto 0);
 		--  ain      : inout std_logic_vector(6 downto 0);
 		--  d        : inout std_logic_vector(14 downto 0));
       user_btn   : in std_logic;
@@ -70,9 +71,12 @@ architecture rtl of misc_forth is
 	
 	signal uart_data_mux : std_logic_vector(7 downto 0);
 	
+	signal led_reg : std_logic_vector(7 downto 0);
+	
 begin
 
 	reset <= not user_btn;
+	led <= led_reg;
 	
 u1:  misc port map (
 			clock => clk12m,
@@ -110,10 +114,20 @@ u3:  uart port map (
 			end if;
 		end if;
 	end process;
+	
+	process(clk12m)
+	begin
+		if rising_edge(clk12m) then
+			if cpu_wr = '1' and address = X"7FFF" then
+				led_reg <= cpu_data(7 downto 0);
+			end if;
+		end if;
+	end process;
 			
 		
 	with address_reg select data <=
-		(15 downto 8 => '0') & uart_data_mux when X"FFFE",
+		(15 downto 8 => '0') & uart_data_mux when X"FFFE",		
+		(15 downto 8 => '0') & led_reg when X"7FFF",
 		memory_data when others;
 	
 	memory_wr <= '1' when cpu_wr = '1' and address(15 downto 14) = "00" else '0';
