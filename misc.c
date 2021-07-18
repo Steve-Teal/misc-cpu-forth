@@ -66,9 +66,9 @@ uint16_t read(uint16_t address)
         case 9: return sf;
         case 10: return zf;
         case 12: return cf;
-        //case 0xfffd: return 1;  Not used by kernel
+        case 0xfffd: return 1;  //Not used by kernel
         case 0xfffe: return getkey();
-        //case 0xffff: return kbhit()?1:0;  Not used by kernel
+        case 0xffff: return kbhit()?1:0; //Not used by kernel
         default: break;
     }
 
@@ -136,17 +136,25 @@ int main(void)
     uint16_t dst;
     uint16_t temp;
 
+    uint16_t old_pc;
+    int i;
+
     loadfile("kernl-misc-0-7-3.fi");
+    //loadfile("kernl-misc.fi");
     key = 0;
     pc = 0x10; /* Program counter reset value */
     
     while(key != CTRL_C)
+    //for(i=0;i<1000;i++)
     {
+        old_pc = pc;
         src = ram[pc];
         dst = ram[pc+1];
         temp = read(src);
         pc+=2;
         write(dst,temp);
+
+        //printf("PC: %04X : %04X -( %04X )-> %04X ACCU: %04X\n",old_pc,src,temp,dst,accu);
     }
 
     return 0;

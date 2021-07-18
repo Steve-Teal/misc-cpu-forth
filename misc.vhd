@@ -10,7 +10,8 @@ entity misc is
 		data_out : out std_logic_vector(15 downto 0);
 		address  : out std_logic_vector(15 downto 0);
 		rd       : out std_logic;
-		wr       : out std_logic);
+		wr       : out std_logic;
+		t1out    : out std_logic);
 end entity;
 
 architecture rtl of misc is
@@ -58,11 +59,19 @@ begin
 				state <= T0;
 			else
 				case state is
-					when T0 => state <= T1;
-					when T1 => state <= T2;
-					when T2 => state <= T3;
-					when T3 => state <= T4;
-					when T4 => state <= T1;
+					when T0 =>
+						state <= T1;
+						t1out <= '1';
+					when T1 =>
+						state <= T2;
+						t1out <= '0';
+					when T2 =>
+						state <= T3;
+					when T3 =>
+						state <= T4;
+					when T4 =>
+						t1out <= '1';
+						state <= T1;
 				end case;
 			end if;
 		end if;
