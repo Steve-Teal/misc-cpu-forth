@@ -36,21 +36,21 @@ architecture rtl of uart is
 	signal tx_running          : std_logic;
 	signal tx_bit_timer_top    : std_logic;
 	signal tx_bit_counter_zero : std_logic;
-	signal rx_shift_register   : std_logic_vector(7 downto 0);
-	signal shift_rx_shifter    : std_logic;
-	signal rx_bit_timer        : unsigned(12 downto 0);
-	signal rx_bit_counter      : unsigned(3 downto 0);
-	signal rx_running          : std_logic;
-	signal rx_bit_timer_top    : std_logic;
-	signal rx_input_filter     : std_logic_vector(2 downto 0);
-	signal rx_synced           : std_logic;
-	signal rx_stop_bit         : std_logic;
-	signal rx_ready_reg        : std_logic;
-	signal rx_sync_prev        : std_logic;
+
+	
 	signal tx_fifo_rd          : std_logic;
 	signal tx_fifo_empty       : std_logic;
 	signal tx_fifo_out         : std_logic_vector(7 downto 0);
 	signal tx_load_shifter     : std_logic;
+	
+	
+	-- RX --
+	
+	signal rx_sample      : std_logic;
+	signal rx_sync        : std_logic;
+	signal rx_bit_timer   : unsigned(12 downto 0);
+	signal rx_bit_counter : unsigned(3 downto 0);
+	signal rx_shifter     : std_logic_vector(7 downto 0);
 	
 begin
 
@@ -65,12 +65,10 @@ u1:		fifo port map (
 	tx <= tx_shift_register(0);
 	tx_bit_counter_zero <= '1' when tx_bit_counter = "0000" else '0';	
 	tx_bit_timer_top <= '1' when tx_bit_timer = unsigned(brg) else '0';
-	rx_bit_timer_top <= '1' when rx_bit_timer = unsigned(brg) else '0';
-	shift_rx_shifter <= '1' when rx_bit_timer = '0' & unsigned(brg(12 downto 1)) else '0';
-	rx_stop_bit <= '1' when rx_bit_counter = "1001" and shift_rx_shifter = '1' else '0';
-	rx_ready <= rx_ready_reg;
 	
 	tx_fifo_rd <= not (tx_fifo_empty or tx_running or tx_load_shifter);
+	
+	rx_ready <= '0'; -- Not used
 	
 	process(clock)
 	begin
@@ -129,14 +127,14 @@ u1:		fifo port map (
 		end if;
 	end process;
 	
+	------------- RX ------------
+	
+	rx_sample <= '1' when rx_bit_timer = '0' & unsigned(brg(12 downto 1)) else '0';
+	
 	process(clock)
 	begin
-		if rising_edge(clock) then
-			rx_input_filter <= rx_input_filter(1 downto 0) & rx;
-			rx_synced <= (rx_input_filter(0) and rx_input_filter(1)) or
-					     (rx_input_filter(1) and rx_input_filter(2)) or
-					     (rx_input_filter(0) and rx_input_filter(2));
-			rx_sync_prev <= rx_synced;
+		if rising_edge(clock) then			
+			rx_sync <= rx;
 		end if;
 	end process;
 	
@@ -144,45 +142,44 @@ u1:		fifo port map (
 	begin
 		if rising_edge(clock) then
 			if reset = '1' then
-				rx_running <= '0';
-			elsif rx_running = '0' then
-				rx_running <= rx_sync_prev and not rx_synced; -- Look for falling edge of start bit
 				rx_bit_timer <= (others=>'0');
-				rx_bit_counter <= "0000";
-			elsif rx_stop_bit = '1' then
-				rx_running <= '0';
+				rx_bit_counter <= (others=>'0');
+			elsif rx_sample = '1' and rx_bit_counter = "0000" and rx_sync = '1' then
 				rx_bit_timer <= (others=>'0');
-				rx_bit_counter <= "0000";
-			elsif rx_bit_timer_top = '1' then
+				rx_bit_counter <= (others=>'0');
+			elsif rx_sample = '1' and rx_bit_counter = "1001" then
 				rx_bit_timer <= (others=>'0');
-				rx_bit_counter <= rx_bit_counter + 1;
-			else
-				rx_bit_timer <= rx_bit_timer + 1;
-			end if;
-		end if;
-	end process;
-	
-	process(clock)
-	begin
-		if rising_edge(clock) then
-			if shift_rx_shifter = '1' and rx_stop_bit = '0' then
-				rx_shift_register <= rx_synced & rx_shift_register(7 downto 1);
-			end if;
-		end if;
-	end process;
-	
-	process(clock)
-	begin
-		if rising_edge(clock) then
-			if reset = '1' then
-				rx_ready_reg <= '0';
-			elsif rx_rd = '1' or (rx_stop_bit = '1' and rx_synced = '1') then
-				if rx_ready_reg = '1' and rx_rd = '1' then
-					rx_ready_reg <= '0';
-				elsif rx_stop_bit = '1' and rx_synced = '1' then
-					rx_ready_reg <= '1';
-					data_out <= rx_shift_register;
+				rx_bit_counter <= (others=>'0');
+			elsif rx_bit_timer > 0 or rx_bit_counter > 0 or rx_sync = '0' then
+				if rx_bit_timer = unsigned(brg) then
+					rx_bit_timer <= (others=>'0');
+					rx_bit_counter <= rx_bit_counter + 1;
+				else
+					rx_bit_timer <= rx_bit_timer + 1;
 				end if;
+			else
+				rx_bit_timer <= (others=>'0');
+				rx_bit_counter <= (others=>'0');
+			end if;
+		end if;
+	end process;
+	
+	process(clock)
+	begin
+		if rising_edge(clock) then
+			if rx_sample = '1' and rx_bit_counter /= "1001" then
+				rx_shifter <= rx_sync & rx_shifter(7 downto 1);
+			end if;
+		end if;
+	end process;
+	
+	process(clock)
+	begin
+		if rising_edge(clock) then
+			if rx_sample = '1' and rx_bit_counter = "1001" and rx_sync = '1' then
+				data_out <= rx_shifter;
+			elsif rx_rd = '1' then
+				data_out <= X"00";
 			end if;
 		end if;
 	end process;

@@ -92,7 +92,7 @@ architecture rtl of misc_forth is
 	
 	signal uart_wr : std_logic;
 	signal uart_rd : std_logic;
-	signal uart_rx_ready : std_logic;
+
 	
 	signal address : std_logic_vector(15 downto 0);
 	
@@ -100,8 +100,6 @@ architecture rtl of misc_forth is
 	signal cpu_wr : std_logic;
 	
 	signal memory_wr : std_logic;
-	
-	signal uart_data_mux : std_logic_vector(7 downto 0);
 	
 	signal led_reg : std_logic_vector(7 downto 0);
 	
@@ -121,6 +119,9 @@ architecture rtl of misc_forth is
 	signal blue : std_logic_vector(3 downto 0);
 	signal vram_address_mux : std_logic_vector(11 downto 0);
 	signal data_mux : std_logic_vector(15 downto 0);
+	signal mscounter : unsigned(15 downto 0);
+	
+	signal hfcounter : integer range 0 to 25199;
 	
 begin
 
@@ -139,9 +140,10 @@ begin
 	
 	pio(3) <= '1';
 	
-	pio(2) <= utx;
 	--bdbus(1) <= utx;
 	--urx <= bdbus(0);
+	
+	pio(2) <= utx;
 	urx <= pio(1);
 	
 u1:  misc port map (
@@ -170,7 +172,7 @@ u3:  uart port map (
 			tx_wr => uart_wr,
 			tx => utx,
 			rx => urx,
-			rx_ready => uart_rx_ready,
+			rx_ready => open,
 			rx_rd => uart_rd);
 			
 u4:  pll port map (
@@ -217,21 +219,32 @@ u6: 	vram port map (
 			
 		
 	with address_reg select data <=
-		(15 downto 8 => '0') & uart_data_mux when X"FFFE",		
+		(15 downto 8 => '0') & uart_data when X"FFFE",		
 		(15 downto 8 => '0') & led_reg when X"7FFF",
+		std_logic_vector(mscounter) when X"7FFD",
 		data_mux when others;
 	
 	memory_wr <= '1' when cpu_wr = '1' and address(15 downto 14) = "00" else '0';
-	uart_rd <= '1' when cpu_rd = '1' and address_reg = X"FFFE" else '0';
 	uart_wr <= '1' when cpu_wr = '1' and address = X"FFFC" else '0';
-	
-	uart_data_mux <= uart_data when uart_rx_ready = '1' else X"00";
-	
+	uart_rd <= '1' when cpu_rd = '1' and address_reg = X"FFFE" else '0';
 	vram_address_mux <= vram_address when vram_rd = '1' else address(11 downto 0);
 	
 	vram_wr <= '1' when cpu_wr = '1' and address(15 downto 12) = "0100" else '0';
 	
 	data_mux <= memory_data when address_reg(15 downto 14) = "00" else vram_data;
+	
+	
+	process(clock)
+	begin
+		if rising_edge(clock) then
+			if hfcounter = 25199 then
+				hfcounter <= 0;
+				mscounter <= mscounter + 1;
+			else
+				hfcounter <= hfcounter + 1;
+			end if;
+		end if;
+	end process;
 		
 
 end rtl;
