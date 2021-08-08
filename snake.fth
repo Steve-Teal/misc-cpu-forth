@@ -59,16 +59,15 @@ variable seed
 : ?game-over next-head @ dup
   0= if move-snake drop 0 exit then
   a9a = if grow-snake 0 exit then -1 ;
-: new-direction direction @ = if drop exit then 
-  direction ! ; 
-: user-input key
-  dup 38 = if 3 1 new-direction drop exit then
-  dup 36 = if 0 2 new-direction drop exit then 
-  dup 32 = if 1 3 new-direction drop exit then  
-  34 = if 2 0 new-direction exit then ;
+: new-direction direction @ + 3 and direction ! ;
+: user-input key 
+  dup 2e = if 1 new-direction then
+  dup 2c = if -1 new-direction then
+  drop direction @ 3 and direction ! ; 
 : snake decimal def-segs randomize init-screen
-  begin new-game
-  begin wait-key 20 = until 
+  begin new-game wait-key
   begin loop-delay user-input ?game-over until
-  game-over wait-key 1b = until ;
+  game-over 
+  begin wait-key dup 1b = over 20 = or until
+  1b = until ;
 

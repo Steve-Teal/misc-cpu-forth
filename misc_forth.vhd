@@ -226,12 +226,23 @@ u6: 	vram port map (
 	
 	memory_wr <= '1' when cpu_wr = '1' and address(15 downto 14) = "00" else '0';
 	uart_wr <= '1' when cpu_wr = '1' and address = X"FFFC" else '0';
-	uart_rd <= '1' when cpu_rd = '1' and address_reg = X"FFFE" else '0';
+	--uart_rd <= '1' when cpu_rd = '1' and address_reg = X"FFFE" else '0';
 	vram_address_mux <= vram_address when vram_rd = '1' else address(11 downto 0);
 	
 	vram_wr <= '1' when cpu_wr = '1' and address(15 downto 12) = "0100" else '0';
 	
 	data_mux <= memory_data when address_reg(15 downto 14) = "00" else vram_data;
+	
+	process(clock)
+	begin
+		if rising_edge(clock) then
+			if cpu_rd = '1' and address = X"FFFE" then
+				uart_rd <= '1';
+			else
+				uart_rd <= '0';
+			end if;
+		end if;
+	end process;
 	
 	
 	process(clock)
