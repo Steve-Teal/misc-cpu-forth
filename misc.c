@@ -139,8 +139,9 @@ int main(void)
     uint16_t old_pc;
     int i;
 
-    loadfile("kernl-misc-0-7-3.fi");
+    //loadfile("kernl-misc-0-7-3.fi");
     //loadfile("kernl-misc.fi");
+    loadfile("hello.out");
     key = 0;
     pc = 0x10; /* Program counter reset value */
     
