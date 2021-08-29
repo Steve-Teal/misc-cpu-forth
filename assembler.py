@@ -94,6 +94,7 @@ class Assembler(object):
         if not 'KEYWORD' in tokens[0]:
             for tokentype in tokens[0]: # Should only interrate once
                 self.error("Expected keyword instead of '{}'".format(tokens[0][tokentype]))
+            return
         self.keywords[tokens[0]['KEYWORD']](tokens[1:])
 
     def org(self,tokens):
@@ -188,18 +189,28 @@ class Assembler(object):
                     self.error("Undefined reference to {:s}".format(reference))
 
 
-if len(sys.argv) != 3:
-    print("Usage: python assembler.py <source file name> <output file name>")
-    sys.exit()
+if __name__ == "__main__":
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
+        print("Usage: python assembler.py <source file> <output file> [listing file]")
+        sys.exit()
 
-file = open(sys.argv[1])
-a = Assembler(file)
-file.close()
-file = open(sys.argv[2],"wb")
-for i in range(a.memoryindex):
-    m = a.image[i]
-    file.write(bytes([m>>8,m&0xff]))
-file.close()
+    # Assemble file
+    file = open(sys.argv[1])
+    asm = Assembler(file)
+    file.close()
+
+    # Bail out if we have any errors
+    if asm.errorcount != 0:
+        print("Assembly failed with {:d} errors".format(asm.errorcount))
+        sys.exit()
+
+    # Create output file
+    file = open(sys.argv[2],"wb")
+    for idx in range(asm.memoryindex):
+        word = asm.image[idx]
+        file.write(bytes([word>>8,word&0xff]))
+    file.close()
+    print("Success: output file created {:d} bytes".format(asm.memoryindex<<1))
 
 
 

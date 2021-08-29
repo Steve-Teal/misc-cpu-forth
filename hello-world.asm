@@ -39,7 +39,7 @@ tx          equ 0xfffc
 
             mov pc,#start
 
-hello       db 'Hello World!',0
+hello       db 'MISC-16',0xa,'Hello World!',0
 #hello      dw hello
 #0          dw 0
 #1          dw 1
@@ -49,7 +49,6 @@ ptr         dw 0
 #start      dw start
 #lp1        dw lp1
 #end        dw end
-
 
 start       mov a,#hello
             mov #ptr,a
