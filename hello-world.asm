@@ -30,28 +30,34 @@ a&          equ 14
 a>>         equ 15 
 
 ;
-; UART addresses
+; UART registers
 ;
 
-tx          equ 0xfffc
+tx          equ 0xfffc      ; Transmit register
+?tx         equ 0xfffd      ; Bit 0 transmiter busy
+rx          equ 0xfffe      ; Receive register
+?rx         equ 0xffff      ; Bit 0 receive register empty
 
             org 0x10
 
             mov pc,#start
 
-hello       db 'MISC-16',0xa,'Hello World!',0
+hello       db 'MISC-16',0xa,'Hello World!',0xa,0
 #hello      dw hello
 #0          dw 0
 #1          dw 1
 #ff         dw 0xff
 ptr         dw 0
-#ptr        dw 0
 #start      dw start
 #lp1        dw lp1
 #end        dw end
+#test       dw test
+t0          dw 0
+
+text        db 'AC'
 
 start       mov a,#hello
-            mov #ptr,a
+            mov ptr,a
 lp1         mov a,[a]
             mov a>>,a
             mov a>>,a
@@ -62,18 +68,26 @@ lp1         mov a,[a]
             mov a>>,a
             mov a>>,a
             mov a&,#ff
-            mov pcz,#end
+            mov pcz,#test
             mov tx,a
-            mov a,#ptr
+            mov a,ptr
             mov a,[a]
             mov a&,#ff
-            mov pcz,#end
+            mov pcz,#test
             mov tx,a
-            mov a,#ptr
+            mov a,ptr
             mov a+,#1
-            mov #ptr,a
+            mov ptr,a
             mov pc,#lp1
-end         mov pc,#end
+test        mov pc,pc+4
+            mov tx,text ; This line skipped
+            mov tx,text
+            mov tx,text
+end         mov t0,pc+2
+            mov a>>,?rx
+            mov pcc,t0
+            mov tx,rx
+            mov pc,#end
 
 ; End of file
 

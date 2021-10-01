@@ -66,9 +66,9 @@ uint16_t read(uint16_t address)
         case 9: return sf;
         case 10: return zf;
         case 12: return cf;
-        case 0xfffd: return 1;  //Not used by kernel
+        case 0xfffd: return 0; 
         case 0xfffe: return getkey();
-        case 0xffff: return kbhit()?1:0; //Not used by kernel
+        case 0xffff: return kbhit()?0:1;
         default: break;
     }
 
@@ -120,7 +120,7 @@ void write(uint16_t address, uint16_t data)
         case 13: writeAccu(data | accu); return;
         case 14: writeAccu(data & accu); return;
         case 15: writeAccu(shiftright(data)); return;
-        case 0xfffc: putch(data&0xff); return;
+        case 0xfffc: if(data!=13)putch(data&0xff); return;
         default: break;
     }
 
@@ -140,8 +140,7 @@ int main(void)
     int i;
 
     //loadfile("kernl-misc-0-7-3.fi");
-    //loadfile("kernl-misc.fi");
-    loadfile("hello.out");
+    loadfile("out.bin");
     key = 0;
     pc = 0x10; /* Program counter reset value */
     
