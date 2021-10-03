@@ -25,7 +25,6 @@ pcs         equ 1
 pcz         equ 2     
 pcc         equ 4     
 a-          equ 9
--a          equ 10
 a+          equ 11
 a^          equ 12
 a|          equ 13
@@ -74,7 +73,6 @@ t3          dw 0
 #1          dw 1
 #2          dw 2
 #ff         dw 0xff
-#8000       dw 0x8000
 #ff00       dw 0xff00
 #ffff       dw 0xffff
 
@@ -114,29 +112,43 @@ $next      dw dolist2
 ; donext ( -- )
 ; Run time code for the single index loop
 
-donext      mov a,rp
+donext      mov a,rp            ; RP points to index
             mov a,[a]
-            mov a-,#1
+            mov a-,#1           ; Decrement index
             mov t0,a
             mov a,rp
-            mov pcc,donext1
-            mov [a],t0
-            mov a,ip
-            mov t0,[a]      
-            mov ip,a
+            mov pcc,donext1     ; Jump if loop finished (index was 0 before decrementing)
+            mov [a],t0          ; Store new index
+            mov a,ip            ; IP points to location of word to jump back to
+            mov ip,[a]          
             mov pc,$next
-donext1     dw donext2
-donext2     mov a-,#1
+donext1     dw donext2          ; Loop has finished
+donext2     mov a-,#1           ; Decrement RP (remove index from return stack)
             mov rp,a
+            mov a,ip            ; Skip next word 
+            mov a+,#1
+            mov ip,a
+            mov pc,$next        ; Execute next word on list
+
+; dosys ( -- a )
+; Return the address of a variable
+
+dosys       mov a,ip
+            mov a+,a
+            mov t0,a
             mov a,ip
             mov a+,#1
             mov ip,a
-            mov ip,$next
+            mov a,sp
+            mov a-,#1
+            mov sp,a
+            mov [a],t0
+            mov pc,$next
 
 ; ?branch ( f -- )
 ; Branch if flag is zero
 
-?branch     mov a,sp
+qbranch     mov a,sp
             mov t0,[a]
             mov a+,#1
             mov sp,a
@@ -187,7 +199,7 @@ emit        mov t0,pc+2         ; Load t0 with address of next instruction
             mov pcc,t0          ; Loop to previous instruction if carry set
             mov a,sp 
             mov tx,[a]          ; Read stack and transmit character
-            mov a-,#1           ; Decrement stack pointer
+            mov a+,#1           ; Decrement stack pointer
             mov sp,a            ; Store stack pointer
             mov pc,$next
 
@@ -200,7 +212,7 @@ key         mov t0,pc+2         ; Load t0 with address of next instruction
             mov pcc,t0          ; Loop to previous instruction if carry set
             mov a,sp 
             mov [a],rx          ; Push character onto stack
-            mov a-,#1           ; Decrement stack pointer
+            mov a-,#1           ; Increment stack pointer
             mov sp,a            ; Store stack pointer
             mov pc,$next
 
@@ -262,7 +274,7 @@ cstore      mov a,sp
             mov a>>,t0          ; Shift address 
             mov t0,a      
             mov a,[a]           ; Read value from memory
-            mov pcc,#cstore1    ; Jump if wrtting to low byte
+            mov pcc,#cstore1    ; Jump if writing to low byte
             mov a&,#ff
             mov t2,a
             mov a,t1
@@ -287,7 +299,6 @@ cstore2     mov a|,t2
 #cstore1    dw cstore1
 #cstore2    dw cstore2
 
-
 ; c@ ( b -- c )
 ; Push byte memory location to the data stack
 _cat        dw _cstore
@@ -298,14 +309,14 @@ cat         mov a+,#0           ; Clear carry
             mov a,[a]
             mov pcc,pc+6        ; Skip next 2 instructions if carry set
             mov t0,pc+4         ; t0 address of instruction after next "return address"
-            mov pc,#cat1        ; Jump to "subtroutine"
+            mov pc,cat1         ; Jump to "subtroutine"
             mov a&,#ff
             mov t0,a
             mov a,sp
             mov [a],t0
             mov pc,$next
-#cat1       dw cat1
-cat1        mov a>>,a
+cat1        dw cat2
+cat2        mov a>>,a
             mov a>>,a
             mov a>>,a
             mov a>>,a
@@ -446,11 +457,11 @@ _zless      dw _depth
             db 2,'0<'
 zless       mov a,sp
             mov a,[a]       ; Read stack
-            mov a,#8000     ; Mask sign bit
-            mov pcz,pc+4    ; Skip next instruction if a = 0 meaning value was positive
-            mov a,#ffff     ; Value was negative so set a true
-            mov t0,a
-            mov a,sp
+            mov pcs,pc+6    ; Skip next two insructions if negative
+            mov t0,#0       ; False flag
+            mov pc,pc+4     ; Skip next instruction
+            mov t0,#ffff    ; True flag
+            mov a,sp        ; Get stack pointer
             mov [a],t0      ; Write flag to stack
             mov pc,$next
 
@@ -517,29 +528,86 @@ uplus       mov a,sp
             mov [a],t0
             mov pc,$next
 
+; 1+ ( a -- a+1 )
+; Increment top item
+_onep       dw _uplus
+            db 2,'1+'
+onep        mov a,sp
+            mov a,[a]
+            mov a+,#1
+            mov t0,a
+            mov a,sp
+            mov [a],t0
+            mov pc,$next
+
+; 1- ( a -- a-1 )
+; Decrement top item
+_onem       dw _onep
+            db 2,'1-'
+onem        mov a,sp
+            mov a,[a]
+            mov a-,#1
+            mov t0,a
+            mov a,sp
+            mov [a],t0
+            mov pc,$next
+
+; 2/ ( w - w/2 )
+; Divide the top item by two
+_twod       dw _onem
+            db 2,'2/'
+twod        mov a+,#0           ; Clear carry
+            mov a,sp
+            mov a>>,[a]
+            mov t0,a
+            mov a,sp
+            mov [a],t0
+            mov pc,$next
+
+; 2* ( w - w*2 )
+; Multiply the top item by two
+_twom       dw _twod
+            db 2,'2*'
+twom        mov a,sp
+            mov a,[a]
+            mov a+,a
+            mov t0,a
+            mov a,sp
+            mov [a],t0
+            mov pc,$next
+
 ; cold ( -- )
-; The hilevel cold start sequence
-_cold       dw _uplus
+; The hi-level cold start sequence
+_cold       dw _twom
             db 4,'cold'
 cold        mov t0,pc+4
             mov pc,dolist
 
             dw rpsto,spsto    ; Bodge for now
 
-
-
-            dw dolit,73,emit
-            dw dolit,69,emit
-            dw dolit,76,emit
-            dw dolit,76,emit
-            dw dolit,79,emit,cr
-
-            dw cold
-
-
+            
+            dw dolit,10,base,store          ; Set decimal radix
+            dw dolit,endofdict,twom,dp,store     ; Set end of dictionary
+            
 
             dw cr,dotqp
             db 14,'eForth MISC-16'
+
+            dw cr,dolit,123,bdigs,dolit,'0',hold,edigs,type
+            
+            dw cr,dotqp
+            db 3,'AAA'
+            dw cr
+
+            
+
+            
+
+endloop     dw branch,endloop
+
+
+
+            
             dw cr,exit
 
 ; cr ( -- )
@@ -550,28 +618,244 @@ cr          mov t0,pc+4
             mov pc,dolist
             dw dolit,ascii_cr,emit,dolit,ascii_lf,emit,exit
 
-; ."| ( -- )
-; Output a compiled string; run time routine of ."
-_dotqp      dw _cr
-            db 0x83,'."|'
-dotqp       mov t0,pc+4
+; + ( w w -- sum )
+; Add the top two items
+_plus       dw _cr
+            db 1,'+'
+plus        mov t0,pc+4
             mov pc,dolist
-            ;dw dostr,count,type,exit
+            dw uplus,drop,exit
 
-; do$ ( -- a )
+; type ( b u -- )
+; Output u characters from b
+_type       dw _plus
+            db 4,'type'
+type        mov t0,pc+4
+            mov pc,dolist
+            dw tor,branch,type2
+type1       dw dup,cat,emit,onep
+type2       dw donext,type1,drop,exit
+
+; count ( b - b+1 u )
+; Return byte count of a string and add 1 to byte address
+_count      dw _type
+            db 5,'count'
+count       mov t0,pc+4
+            mov pc,dolist
+            dw dup,onep,swap,cat,exit
+
+; do$ ( -- b )
 ; Return the address of a compiled string
-_dostr      dw _dotqp
+_dostr      dw _count
             db 0x83,'do$'
 dostr       mov t0,pc+4
             mov pc,dolist
-            ;dw rfrom,rat,rfrom,count,plus
-            ;dw algnd,tor,swap,tor,exit
+            dw rfrom,rfrom,twom,dup,count,plus
+            dw onep,twod,tor,swap,tor,exit
 
+; ."| ( -- )
+; Output a compiled string; run time routine of ."
+_dotqp      dw _dostr
+            db 0x83,'."|'
+dotqp       mov t0,pc+4
+            mov pc,dolist
+            dw dostr,count,type,exit
 
+; base ( -- a )
+; Return address of system variable 'base' (radix for numeric I/O)
+_base       dw _dotqp
+            db 4,'base'
+base        mov t0,pc+4
+            mov pc,dolist
+            dw dosys,0,exit
 
+; hld ( -- a)
+; Return address of system variable 'hld' (hold address used during construction of numeric output strings)
+_hld        dw _base
+            db 3,'hld'
+hld         mov t0,pc+4
+            mov pc,dolist
+            dw dosys,0,exit
 
+; dp ( -- a)
+; Return address of system variable 'dp' (Dictionary Pointer, next free address in dictionary)
+_dp         dw _hld
+            db 2,'dp'
+dp          mov t0,pc+4
+            mov pc,dolist
+            dw dosys,0,exit
 
+; here ( -- a)
+; Return next free address in dictionary
+_here       dw _dp
+            db 4,'here'
+here        mov t0,pc+4
+            mov pc,dolist
+            dw dp,at,exit
 
+; pad ( -- a)
+; Return address of temporary text buffer
+_pad        dw _here
+            db 3,'pad'
+pad         mov t0,pc+4
+            mov pc,dolist
+            dw here,dolit,80,plus,exit
 
+; <#  ( -- )
+; Initiate the numeric output process (store the address of the text buffer in hld)
+_bdigs      dw _pad
+            db 2,'<#'
+bdigs       mov t0,pc+4
+            mov pc,dolist
+            dw pad,hld,store,exit
 
+; 2dup ( w1 w2 -- w1 w2 w1 w2 )
+; Duplicate top two items
+_ddup       dw _bdigs
+            db 4,'2dup'
+ddup        mov t0,pc+4
+            mov pc,dolist
+            dw over,over,exit
 
+; not ( w -- w )
+; One's complement top item
+_not        dw _ddup
+            db 3,'not'
+not         mov t0,pc+4
+            mov pc,dolist
+            dw dolit,-1,xor,exit
+
+; negate ( w -- -w)
+; Two's complement top item
+_negate     dw _not
+            db 5,'negate'
+negate      mov t0,pc+4
+            mov pc,dolist
+            dw not,onep,exit
+
+; + ( w1 w2 -- w1-w2  )
+; Subtract the top two items
+_sub        dw _negate
+            db 1,'-'
+sub         mov t0,pc+4
+            mov pc,dolist
+            dw negate,plus,exit
+
+; u<  ( u u -- t )
+; Unsigned compare of top two items
+_uless      dw _sub
+            db 2,'u<'
+uless       mov t0,pc+4
+            mov pc,dolist
+            dw ddup,xor,zless,qbranch,uless1
+            dw swap,drop,zless,exit
+uless1      dw sub,zless,exit
+
+; 2drop ( w w -- )
+; Discard two items on stack
+_ddrop      dw _uless
+            db 5,'2drop'
+ddrop       mov t0,pc+4
+            mov pc,dolist
+            dw drop,drop,exit
+
+; um/mod ( ud u -- ur uq )
+; Unsigned divide of a double by a single. Return mod and quotient
+_ummod      dw _ddrop
+            db 6,'um/mod'
+ummod       mov t0,pc+4
+            mov pc,dolist
+            dw ddup,uless
+            dw qbranch,ummod4
+            dw negate,dolit,15,tor
+unmod1      dw tor,dup,uplus
+            dw tor,tor,dup,uplus
+            dw rfrom,plus,dup
+            dw rfrom,rat,swap,tor
+            dw uplus,rfrom,or
+            dw qbranch,unmod2
+            dw tor,drop,onep,rfrom
+            dw branch,unmod3
+unmod2      dw drop
+unmod3      dw rfrom
+            dw donext,unmod1
+            dw drop,swap,exit
+ummod4      dw drop,ddrop
+            dw dolit,-1,dup,exit
+
+; < ( n1 n2 -- t )
+; Signed compare of top two items
+_less       dw _ummod
+            db 1,'<'
+less        mov t0,pc+4
+            mov pc,dolist
+            dw ddup,xor,zless
+            dw qbranch,less1
+            dw drop,zless,exit
+less1       dw sub,zless,exit
+
+; digit ( u -- c )
+; Convert digit u to a character
+_digit      dw _less
+            db 5,'digit'
+digit       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,9,over,less
+            dw dolit,7,and,plus
+            dw dolit,'0',plus,exit
+
+; extract ( n base -- n c )
+; Extract the least significant digit from n
+_extract    dw _digit
+            db 7,'extract'
+extract     mov t0,pc+4
+            mov pc,dolist
+            dw dolit,0,swap,ummod
+            dw swap,digit,exit
+
+; hold ( c -- )
+; Insert a character into the numeric output string
+_hold       dw _extract
+            db 4,'hold'
+hold        mov t0,pc+4
+            mov pc,dolist
+            dw hld,at,onem,dup,hld,store,cstore,exit
+
+; # ( u -- u )
+; Extract one digit from u and append the digit to output string
+_dig        dw _hold
+            db 1,'#'
+dig         mov t0,pc+4
+            mov pc,dolist
+            dw base,at,extract,hold,exit
+
+; #s ( u -- 0 )
+; Convert u until all digits are added to the output string.
+_digs       dw _dig
+            db 2,'#s'
+digs        mov t0,pc+4
+            mov pc,dolist
+digs1       dw dig,dup,qbranch,digs2
+            dw branch,digs1
+digs2       dw exit
+
+; sign ( n -- )
+; Add a minus sign to the numeric output string
+_sign       dw _digs
+            db 4,'sign'
+sign        mov t0,pc+4
+            mov pc,dolist
+            dw zless,qbranch,sign1
+            dw dolit,'-',hold
+sign1       dw exit
+
+; #> ( w -- b u )
+; Prepare the output string to be TYPE'd.
+_edigs      dw _sign
+            db 2,'#>'
+edigs       mov t0,pc+4
+            mov pc,dolist
+            dw drop,hld,at,pad,over,sub,exit          
+
+endofdict   dw 0
+; End of file
