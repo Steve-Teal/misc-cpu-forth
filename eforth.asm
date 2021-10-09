@@ -18,9 +18,6 @@ pc+4        equ 2
 pc+6        equ 3
 [a]         equ 7
 a           equ 8
-sf          equ 9
-zf          equ 10
-cf          equ 12
 pcs         equ 1     
 pcz         equ 2     
 pcc         equ 4     
@@ -30,11 +27,6 @@ a^          equ 12
 a|          equ 13
 a&          equ 14
 a>>         equ 15     
-
-; ASCII Characters
-
-ascii_lf    equ 10
-ascii_cr    equ 13
 
 ; UART registers
 
@@ -72,6 +64,7 @@ t3          dw 0
 #0          dw 0
 #1          dw 1
 #2          dw 2
+#16         dw 16
 #ff         dw 0xff
 #ff00       dw 0xff00
 #ffff       dw 0xffff
@@ -130,10 +123,10 @@ donext2     mov a-,#1           ; Decrement RP (remove index from return stack)
             mov ip,a
             mov pc,$next        ; Execute next word on list
 
-; dosys ( -- a )
+; dovar ( -- a )
 ; Return the address of a variable
 
-dosys       mov a,ip
+dovar       mov a,ip
             mov a+,a
             mov t0,a
             mov a,ip
@@ -278,14 +271,14 @@ cstore      mov a,sp
             mov a&,#ff
             mov t2,a
             mov a,t1
-            mov a+,t1
-            mov a+,t1
-            mov a+,t1
-            mov a+,t1
-            mov a+,t1
-            mov a+,t1
-            mov a+,t1
-            mov a+,t1
+            mov a+,a
+            mov a+,a
+            mov a+,a
+            mov a+,a
+            mov a+,a
+            mov a+,a
+            mov a+,a
+            mov a+,a
             mov pc,#cstore2
 cstore1     mov a&,#ff00
             mov t2,a
@@ -465,9 +458,23 @@ zless       mov a,sp
             mov [a],t0      ; Write flag to stack
             mov pc,$next
 
+; 0= ( n -- t)
+; Return true if n is zero
+_zequal     dw _zless
+            db 2,'0='
+zequal      mov a,sp
+            mov a,[a]
+            mov pcz,pc+4
+            mov a,#1
+            mov a-,#1
+            mov t0,a
+            mov a,sp
+            mov [a],t0
+            mov pc,$next
+
 ; and ( w w -- w )
 ; Bitwise and
-_and        dw _zless
+_and        dw _zequal
             db 3,'and'
 and         mov a,sp
             mov t0,[a]
@@ -593,10 +600,18 @@ cold        mov t0,pc+4
             dw cr,dotqp
             db 14,'eForth MISC-16'
 
-            dw cr,dolit,123,bdigs,dolit,'0',hold,edigs,type
+            dw dolit,16,base,store
+            dw cr,dolit,20,tor
+lp1         dw rat,dolit,10,negate,plus,dot
+            dw donext,lp1
+
+            
+            
+
+
             
             dw cr,dotqp
-            db 3,'AAA'
+            db 3,'AAB'
             dw cr
 
             
@@ -616,11 +631,19 @@ _cr         dw _cold
             db 2,'cr'
 cr          mov t0,pc+4
             mov pc,dolist
-            dw dolit,ascii_cr,emit,dolit,ascii_lf,emit,exit
+            dw dolit,13,emit,dolit,10,emit,exit
+
+; space ( -- )
+; Send the blank character to the output device
+_space      dw _cr
+            db 5,'space'
+space       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,32,emit,exit
 
 ; + ( w w -- sum )
 ; Add the top two items
-_plus       dw _cr
+_plus       dw _space
             db 1,'+'
 plus        mov t0,pc+4
             mov pc,dolist
@@ -662,28 +685,28 @@ dotqp       mov t0,pc+4
             dw dostr,count,type,exit
 
 ; base ( -- a )
-; Return address of system variable 'base' (radix for numeric I/O)
+; Return address of variable 'base' (radix for numeric I/O)
 _base       dw _dotqp
             db 4,'base'
 base        mov t0,pc+4
             mov pc,dolist
-            dw dosys,0,exit
+            dw dovar,0,exit
 
 ; hld ( -- a)
-; Return address of system variable 'hld' (hold address used during construction of numeric output strings)
+; Return address of variable 'hld' (hold address used during construction of numeric output strings)
 _hld        dw _base
             db 3,'hld'
 hld         mov t0,pc+4
             mov pc,dolist
-            dw dosys,0,exit
+            dw dovar,0,exit
 
 ; dp ( -- a)
-; Return address of system variable 'dp' (Dictionary Pointer, next free address in dictionary)
+; Return address of variable 'dp' (Dictionary Pointer, next free address in dictionary)
 _dp         dw _hld
             db 2,'dp'
 dp          mov t0,pc+4
             mov pc,dolist
-            dw dosys,0,exit
+            dw dovar,0,exit
 
 ; here ( -- a)
 ; Return next free address in dictionary
@@ -733,7 +756,7 @@ negate      mov t0,pc+4
             mov pc,dolist
             dw not,onep,exit
 
-; + ( w1 w2 -- w1-w2  )
+; - ( w1 w2 -- w1-w2  )
 ; Subtract the top two items
 _sub        dw _negate
             db 1,'-'
@@ -759,29 +782,59 @@ ddrop       mov t0,pc+4
             mov pc,dolist
             dw drop,drop,exit
 
-; um/mod ( ud u -- ur uq )
+; um/mod ( udl udh u -- ur uq )
 ; Unsigned divide of a double by a single. Return mod and quotient
 _ummod      dw _ddrop
             db 6,'um/mod'
-ummod       mov t0,pc+4
-            mov pc,dolist
-            dw ddup,uless
-            dw qbranch,ummod4
-            dw negate,dolit,15,tor
-unmod1      dw tor,dup,uplus
-            dw tor,tor,dup,uplus
-            dw rfrom,plus,dup
-            dw rfrom,rat,swap,tor
-            dw uplus,rfrom,or
-            dw qbranch,unmod2
-            dw tor,drop,onep,rfrom
-            dw branch,unmod3
-unmod2      dw drop
-unmod3      dw rfrom
-            dw donext,unmod1
-            dw drop,swap,exit
-ummod4      dw drop,ddrop
-            dw dolit,-1,dup,exit
+ummod       mov a,sp
+            mov t0,[a]
+            mov a+,#1
+            mov t1,[a]
+            mov a+,#1
+            mov t2,[a]
+
+            mov a,#16       ; Setup 16 interation loop
+            mov t3,a
+
+um1         mov a,t1        ; Left shift udh
+            mov a+,t1
+            mov t1,a
+
+            mov a,t2        ; Left shift udl
+            mov a+,t2
+            mov t2,a
+
+            mov a,t1        ; Add carry to udh
+            mov pcc,pc+4
+            mov pc,pc+4
+            mov a+,#1
+            mov t1,a
+
+            mov a-,t0       ; Subtract U from udh
+            mov pcc,_um2    ; Skip if borrow
+
+            mov t1,a        ; Update udh
+            mov a,t2
+            mov a+,#1       ; Add bit to udl
+            mov t2,a
+
+
+um2         mov a,t3        ; Decrement loop counter
+            mov a-,#1
+            mov t3,a
+            mov pcz,pc+4
+            mov pc,_um1
+
+            mov a,sp
+            mov a+,#1
+            mov sp,a
+            mov [a],t2
+            mov a+,#1
+            mov [a],t1
+
+            mov pc,$next
+_um1        dw um1            
+_um2        dw um2
 
 ; < ( n1 n2 -- t )
 ; Signed compare of top two items
@@ -855,7 +908,65 @@ _edigs      dw _sign
             db 2,'#>'
 edigs       mov t0,pc+4
             mov pc,dolist
-            dw drop,hld,at,pad,over,sub,exit          
+            dw drop,hld,at,pad,over,sub,exit    
+
+; u. ( u -- )
+; Display an unsigned integer in free format
+_udot       dw _edigs
+            db 2,'u.'
+udot        mov t0,pc+4
+            mov pc,dolist
+            dw bdigs,digs,edigs,space,type,exit
+
+; abs ( n -- n )
+; Return the absolute value of n
+_abs        dw _udot
+            db 3,'abs'
+abs         mov t0,pc+4
+            mov pc,dolist
+            dw dup,zless
+            dw qbranch,abs1
+            dw negate
+abs1        dw exit
+
+; str ( n -- b u )
+; Convert a signed integer to a numeric string
+_str        dw _abs
+            db 3,'str'
+str         mov t0,pc+4
+            mov pc,dolist
+            dw dup,tor,abs,bdigs,digs,rfrom,sign,edigs,exit
+
+; . ( w -- )
+; Display an integer in free format, preceeded by a space
+_dot        dw _str
+            db 1,'.'
+dot         mov t0,pc+4
+            mov pc,dolist
+            dw base,at,dolit,10,xor
+            dw qbranch,dot1
+            dw udot,exit
+dot1        dw str,space,type,exit
+
+umtest      mov t0,pc+4
+            mov pc,dolist
+            dw ddup,uless
+            dw qbranch,ummod4
+            dw negate,dolit,15,tor
+unmod1      dw tor,dup,uplus
+            dw tor,tor,dup,uplus
+            dw rfrom,plus,dup
+            dw rfrom,rat,swap,tor
+            dw uplus,rfrom,or
+            dw qbranch,unmod2
+            dw tor,drop,onep,rfrom
+            dw branch,unmod3
+unmod2      dw drop
+unmod3      dw rfrom
+            dw donext,unmod1
+            dw drop,swap,exit
+ummod4      dw drop,ddrop
+            dw dolit,-1,dup,exit                  
 
 endofdict   dw 0
 ; End of file
