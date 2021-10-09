@@ -528,7 +528,7 @@ uplus       mov a,sp
             mov a+,t0
             mov t0,a
             mov a,sp
-            mov [a],#ffff
+            mov [a],#1
             mov pcc,pc+4
             mov [a],#0
             mov a+,#1
@@ -600,24 +600,15 @@ cold        mov t0,pc+4
             dw cr,dotqp
             db 14,'eForth MISC-16'
 
-            dw dolit,16,base,store
+            
             dw cr,dolit,20,tor
 lp1         dw rat,dolit,10,negate,plus,dot
             dw donext,lp1
 
-            
-            
+            dw dolit,16,base,store
+            dw dolit,0x1234,cr,dot,cr
 
-
-            
-            dw cr,dotqp
-            db 3,'AAB'
-            dw cr
-
-            
-
-            
-
+        
 endloop     dw branch,endloop
 
 
@@ -787,54 +778,44 @@ ddrop       mov t0,pc+4
 _ummod      dw _ddrop
             db 6,'um/mod'
 ummod       mov a,sp
-            mov t0,[a]
+            mov t0,[a]      ; u
             mov a+,#1
-            mov t1,[a]
+            mov t1,[a]      ; udh
             mov a+,#1
-            mov t2,[a]
-
+            mov t2,[a]      ; udl
             mov a,#16       ; Setup 16 interation loop
             mov t3,a
-
 um1         mov a,t1        ; Left shift udh
             mov a+,t1
             mov t1,a
-
             mov a,t2        ; Left shift udl
             mov a+,t2
             mov t2,a
-
             mov a,t1        ; Add carry to udh
             mov pcc,pc+4
             mov pc,pc+4
             mov a+,#1
             mov t1,a
-
             mov a-,t0       ; Subtract U from udh
-            mov pcc,_um2    ; Skip if borrow
-
+            mov pcc,#um2    ; Skip if borrow
             mov t1,a        ; Update udh
             mov a,t2
             mov a+,#1       ; Add bit to udl
             mov t2,a
-
-
 um2         mov a,t3        ; Decrement loop counter
             mov a-,#1
             mov t3,a
             mov pcz,pc+4
-            mov pc,_um1
-
-            mov a,sp
-            mov a+,#1
+            mov pc,#um1     ; Loop
+            mov a,sp        ; End loop
+            mov a+,#1       ; Decrement stack
             mov sp,a
-            mov [a],t2
+            mov [a],t2      ; Quotent
             mov a+,#1
-            mov [a],t1
-
+            mov [a],t1      ; Remainder
             mov pc,$next
-_um1        dw um1            
-_um2        dw um2
+#um1        dw um1            
+#um2        dw um2
 
 ; < ( n1 n2 -- t )
 ; Signed compare of top two items
@@ -948,25 +929,6 @@ dot         mov t0,pc+4
             dw udot,exit
 dot1        dw str,space,type,exit
 
-umtest      mov t0,pc+4
-            mov pc,dolist
-            dw ddup,uless
-            dw qbranch,ummod4
-            dw negate,dolit,15,tor
-unmod1      dw tor,dup,uplus
-            dw tor,tor,dup,uplus
-            dw rfrom,plus,dup
-            dw rfrom,rat,swap,tor
-            dw uplus,rfrom,or
-            dw qbranch,unmod2
-            dw tor,drop,onep,rfrom
-            dw branch,unmod3
-unmod2      dw drop
-unmod3      dw rfrom
-            dw donext,unmod1
-            dw drop,swap,exit
-ummod4      dw drop,ddrop
-            dw dolit,-1,dup,exit                  
-
+            
 endofdict   dw 0
 ; End of file
