@@ -1,14 +1,6 @@
 
 
-; Inner interpreters: dolit dolist donext ?branch branch execute exit
-; System interface:   emit key ?key
-; Memory access:      ! @ c! c@
-; Return stack:       rp! r> r@ >r
-; Data stack:         sp! drop dup swap over pick depth
-; Logic:              0< and or xor
-; Arithmetic:         um+
-;
-
+; MISC-16 eForth port
 
 ; Special CPU registers
 
@@ -605,8 +597,15 @@ cold        mov t0,pc+4
 lp1         dw rat,dolit,10,negate,plus,dot
             dw donext,lp1
 
-            dw dolit,16,base,store
+            dw cr,decimal,base,quest,hex,base,quest
             dw dolit,0x1234,cr,dot,cr
+            dw decimal
+            dw dolit,10,dolit,100,max,dot,cr
+            dw dolit,10,dolit,100,min,dot,cr
+
+            dw dolit,10,tor
+lp2         dw rat,dolit,5,sub,dolit,5,udotr,cr
+            dw donext,lp2
 
         
 endloop     dw branch,endloop
@@ -929,6 +928,79 @@ dot         mov t0,pc+4
             dw udot,exit
 dot1        dw str,space,type,exit
 
-            
+; ? ( a -- )
+; Display the contents in a memory cell
+_quest      dw _dot
+            db 1,'?'
+quest       mov t0,pc+4
+            mov pc,dolist
+            dw at,dot,exit
+
+; hex ( -- )
+; Use radix 16 as base for numeric conversions
+_hex        dw _quest
+            db 3,'hex'
+hex         mov t0,pc+4
+            mov pc,dolist
+            dw dolit,16,base,store,exit
+
+; decimal ( -- )
+; Use radix 10 as base for numeric conversions
+_decimal    dw _hex
+            db 7,'decimal'
+decimal     mov t0,pc+4
+            mov pc,dolist
+            dw dolit,10,base,store,exit
+
+; max ( n1 n2 -- n )
+; Return the greater of two top stack items
+_max        dw _decimal
+            db 3,'max'
+max         mov t0,pc+4
+            mov pc,dolist
+            dw ddup,less,qbranch,max1
+            dw swap
+max1        dw drop,exit
+
+; min ( n1 n2 -- n )
+; Return the smaller of top two stack items
+_min        dw _max
+            db 3,'min'
+min         mov t0,pc+4
+            mov pc,dolist
+            dw ddup,swap,less,qbranch,min1
+            dw swap
+min1        dw drop,exit
+
+; spaces  ( n -- )
+; Send n spaces to the output device
+_spaces     dw _min
+            db 6,'spaces'
+spaces      mov t0,pc+4
+            mov pc,dolist
+            dw dolit,0,max,tor
+            dw branch,spaces2
+spaces1     dw space
+spaces2     dw donext,spaces1,exit
+
+; .r ( n +n -- )
+; Display an integer in a field of n columns, right justified
+_dotr       dw _spaces
+            db 2,'.r'
+dotr        mov t0,pc+4
+            mov pc,dolist
+            dw tor,str,rfrom,over,sub
+            dw spaces,type,exit
+
+; u.r ( u +n -- )
+; Display an unsigned integer in n column, right justified
+_udotr      dw _dotr
+            db 3,'u.r'
+udotr       mov t0,pc+4
+            mov pc,dolist
+            dw tor,bdigs,digs,edigs
+            dw rfrom,over,sub
+            dw spaces,type,exit
+
 endofdict   dw 0
 ; End of file
