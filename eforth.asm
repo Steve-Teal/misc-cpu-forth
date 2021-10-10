@@ -34,12 +34,16 @@ rx          equ 0xfffe      ; Receive register
             mov pc,start
 start       dw cold
 
-; data and return stack
+; Data and return stack
 
 rp0         dw rp0
             org 0x100
 underflow   dw 0,0,0,0
 sp0         dw underflow
+
+; Terminal input buffer
+
+tibb        org 0x12d
 
 ; System variables
 
@@ -196,9 +200,9 @@ key         mov t0,pc+2         ; Load t0 with address of next instruction
             mov a>>,?rx         ; Shift receive empty bit into carry
             mov pcc,t0          ; Loop to previous instruction if carry set
             mov a,sp 
-            mov [a],rx          ; Push character onto stack
             mov a-,#1           ; Increment stack pointer
             mov sp,a            ; Store stack pointer
+            mov [a],rx          ; Push character onto stack
             mov pc,$next
 
 ; ?key ( -- F | c T )
@@ -604,11 +608,22 @@ lp1         dw rat,dolit,10,negate,plus,dot
             dw dolit,10,dolit,100,min,dot,cr
 
             dw dolit,10,tor
-lp2         dw rat,dolit,5,sub,dolit,5,udotr,cr
+lp2         dw rat,dolit,5,sub,dup,dolit,5,udotr
+
+            dw dolit,2,dolit,4,within,qbranch,lp3
+            dw dolit,42,emit
+lp3         dw cr
+
             dw donext,lp2
 
-        
-endloop     dw branch,endloop
+            dw tib,dot,cr
+            dw tibl,dot,cr
+
+
+loop        dw tib,tibl,expect
+
+            dw cr,span,quest,cr
+            dw branch,loop
 
 
 
@@ -682,7 +697,7 @@ base        mov t0,pc+4
             mov pc,dolist
             dw dovar,0,exit
 
-; hld ( -- a)
+; hld ( -- a )
 ; Return address of variable 'hld' (hold address used during construction of numeric output strings)
 _hld        dw _base
             db 3,'hld'
@@ -690,7 +705,7 @@ hld         mov t0,pc+4
             mov pc,dolist
             dw dovar,0,exit
 
-; dp ( -- a)
+; dp ( -- a )
 ; Return address of variable 'dp' (Dictionary Pointer, next free address in dictionary)
 _dp         dw _hld
             db 2,'dp'
@@ -698,7 +713,7 @@ dp          mov t0,pc+4
             mov pc,dolist
             dw dovar,0,exit
 
-; here ( -- a)
+; here ( -- a )
 ; Return next free address in dictionary
 _here       dw _dp
             db 4,'here'
@@ -706,7 +721,7 @@ here        mov t0,pc+4
             mov pc,dolist
             dw dp,at,exit
 
-; pad ( -- a)
+; pad ( -- a )
 ; Return address of temporary text buffer
 _pad        dw _here
             db 3,'pad'
@@ -972,9 +987,17 @@ min         mov t0,pc+4
             dw swap
 min1        dw drop,exit
 
+; within ( u ul uh -- t )
+; Return true if u is within the range of ul and uh; ul<=u<uh.)
+_within     dw _min
+            db 6,'within'
+within      mov t0,pc+4
+            mov pc,dolist
+            dw over,sub,tor,sub,rfrom,uless,exit
+
 ; spaces  ( n -- )
 ; Send n spaces to the output device
-_spaces     dw _min
+_spaces     dw _within
             db 6,'spaces'
 spaces      mov t0,pc+4
             mov pc,dolist
@@ -1002,5 +1025,109 @@ udotr       mov t0,pc+4
             dw rfrom,over,sub
             dw spaces,type,exit
 
+; tib ( -- a )
+; Return the address of the terminal input buffer
+_tib        dw _udotr
+            db 3,'tib'
+tib         mov t0,pc+4
+            mov pc,dolist
+            dw dolit,tibb,twom,exit
+
+; tibl ( -- n )
+; Return the length of the terminal input buffer
+_tibl       dw _tib
+            db 4,'tibl'
+tibl        mov t0,pc+4
+            mov pc,dolist
+            dw dolit,sp,twom,tib,sub,exit
+
+; #tib ( -- a )
+; Return address of variable '#tib' (the current count of the terminal input buffer)
+_ntib       dw _tibl
+            db 4,'#tib'
+ntib        mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0,exit
+
+; ^h ( bot eot cur -- bot eot cur )
+; Backup the cursor by one character
+_bksp       dw _ntib
+            db 2,'^h'
+bksp        mov t0,pc+4
+            mov pc,dolist
+            dw tor,over,rfrom,swap,over,xor
+            dw qbranch,bksp1
+            dw dolit,8,dup,emit,space,emit
+            dw onem
+bksp1       dw exit
+
+; tap ( bot eot cur c -- bot eot cur )
+; Accept and echo the key stroke and bump the cursor
+_tap        dw _bksp
+            db 3,'tap'
+tap         mov t0,pc+4
+            mov pc,dolist
+            dw dup,emit,over,cstore,onep,exit
+
+; ktap ( bot eot cur c -- bot eot cur )
+; Process a key stroke, CR or backspace
+_ktap       dw _tap
+            db 4,'ktap'
+ktap        mov t0,pc+4
+            mov pc,dolist
+            dw dup,dolit,13,xor
+            dw qbranch,ktap1
+            dw dolit,8,xor
+            dw qbranch,ktap2
+            dw bl,tap,exit
+ktap1       dw drop,swap,drop,dup,exit
+ktap2       dw bksp,exit
+
+; bl ( -- 32 )
+; Return 32, the blank character
+_bl         dw _ktap
+            db 2,'bl'
+bl          mov t0,pc+4
+            mov pc,dolist
+            dw dolit,32,exit
+
+; accept  ( b u -- b u )
+; Accept characters to input buffer. Return with actual count
+_accept     dw _bl
+            db 6,'accept'
+accept      mov t0,pc+4
+            mov pc,dolist
+            dw over,plus,over
+accept1     dw ddup,xor,qbranch,accept4
+            dw key,dup
+            dw bl,dolit,127,within
+            dw qbranch,accept2
+            dw tap
+            dw branch,accept3
+accept2     dw ktap
+accept3     dw branch,accept1
+accept4     dw drop,over,sub,exit
+
+; span ( -- a )
+; Return address of variable 'span' (character count received by expect)
+_span       dw _accept
+            db 4,'span'
+span        mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0,exit
+
+; expect ( b u -- )
+; Accept input stream and store count in span
+_expect     dw _span
+            db 6,'expect'
+expect      mov t0,pc+4
+            mov pc,dolist
+            dw accept,span,store,drop,exit
+
+
+
 endofdict   dw 0
+
 ; End of file
+
+
