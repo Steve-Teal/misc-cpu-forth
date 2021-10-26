@@ -620,10 +620,7 @@ lp3         dw cr
             dw tibl,dot,cr
 
 
-loop        dw tib,tibl,expect
-
-            dw cr,span,quest,cr
-            dw branch,loop
+loop        dw quit
 
 
 
@@ -1108,21 +1105,80 @@ accept2     dw ktap
 accept3     dw branch,accept1
 accept4     dw drop,over,sub,exit
 
-; span ( -- a )
-; Return address of variable 'span' (character count received by expect)
-_span       dw _accept
-            db 4,'span'
-span        mov t0,pc+4
+; >in ( -- a )
+; Return address of variable 'in' (character pointer while parsing input stream)
+_inn        dw _accept
+            db 2,'>in'
+inn         mov t0,pc+4
             mov pc,dolist
             dw dovar,0,exit
 
-; expect ( b u -- )
-; Accept input stream and store count in span
-_expect     dw _span
-            db 6,'expect'
-expect      mov t0,pc+4
+; query ( -- )
+; Accept input stream to terminal input buffer and initialize parsing pointer
+_query      dw _inn
+            db 5,'query'
+query       mov t0,pc+4
             mov pc,dolist
-            dw accept,span,store,drop,exit
+            dw tib,tibl,accept,ntib,store
+            dw drop,dolit,0,inn,store,exit
+
+; +! ( n a -- )
+; Add n to the contents at address a
+_pstore     dw _query
+            db 2,'+!'
+pstore      mov t0,pc+4
+            mov pc,dolist
+            dw swap,over,at,plus,swap,store,exit
+
+; [ ( -- )
+; Start the text interpreter
+_lbrac      dw _pstore
+            db 1,'['
+lbrac       mov t0,pc+4
+            mov pc,dolist
+            dw exit
+
+; tib> ( -- F | c T)
+; Return true and the next character from the input buffer or false if the buffer is empty
+_tibfrom    dw _lbrac
+            db 4,'tib>'
+tibfrom     mov t0,pc+4
+            mov pc,dolist
+            dw inn,at,ntib,at,xor,dup,qbranch,tibfrom1  ; Buffer empty?
+            dw tib,inn,at,plus,cat                      ; No, read character
+            dw dolit,1,inn,pstore                       ; Increment parsing pointer
+            dw swap,zequal,not                          ; True flag
+tibfrom1    dw exit                                     
+
+; parse ( c -- b u )
+; Scan input stream and return counted string delimited by c
+
+_parse      dw _tibfrom
+            db 5,'parse'
+parse       mov t0,pc+4
+            mov pc,dolist    
+            dw tor                              ; Save delimiter 
+            dw rat,bl,xor,not,qbranch,parse2    ; Branch if delimiter is not space       
+parse1      dw tibfrom,qbranch,parse2           ; Read next character, branch if buffer is empty
+            dw bl,xor,qbranch,parse1            ; Loop if character is space
+            dw dolit,-1,inn,pstore              ; Backup parsing index to first character after spaces
+parse2      dw inn,at,tib,plus                  ; Address of start of string
+            dw dolit,0                          ; Initilize character count
+parse3      dw tibfrom,qbranch,parse4           ; Read next character, branch if buffer empty
+            dw rat,xor,qbranch,parse4           ; Branch if delimeter
+            dw onep,branch,parse3               ; Increment character count
+parse4      dw rfrom,drop,exit                  ; Remove delimiter from return stack       
+
+; quit ( -- )
+; Reset return stack pointer and start text interpreter.
+_quit       dw _parse
+            db 4,'quit'
+quit        mov t0,pc+4
+            mov pc,dolist
+            dw rpsto,lbrac
+quit1       dw query,cr,bl,parse,type,cr,bl,parse,type,cr,branch,quit1
+
+
 
 
 
