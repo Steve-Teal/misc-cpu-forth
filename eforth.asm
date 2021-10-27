@@ -226,7 +226,7 @@ qkey        mov a,sp            ; Decrement stack pointer
 
 ; ! ( w a -- )
 ; Pop the data stack to memory
-_store      dw 0
+_store      dw _qkey
             db 1,'!'
 store       mov a,sp
             mov t0,[a]
@@ -596,31 +596,9 @@ cold        mov t0,pc+4
             dw cr,dotqp
             db 14,'eForth MISC-16'
 
-            
-            dw cr,dolit,20,tor
-lp1         dw rat,dolit,10,negate,plus,dot
-            dw donext,lp1
 
-            dw cr,decimal,base,quest,hex,base,quest
-            dw dolit,0x1234,cr,dot,cr
-            dw decimal
-            dw dolit,10,dolit,100,max,dot,cr
-            dw dolit,10,dolit,100,min,dot,cr
-
-            dw dolit,10,tor
-lp2         dw rat,dolit,5,sub,dup,dolit,5,udotr
-
-            dw dolit,2,dolit,4,within,qbranch,lp3
-            dw dolit,42,emit
-lp3         dw cr
-
-            dw donext,lp2
-
-            dw tib,dot,cr
-            dw tibl,dot,cr
-
-
-loop        dw quit
+        
+            dw cr,quit
 
 
 
@@ -1130,13 +1108,46 @@ pstore      mov t0,pc+4
             mov pc,dolist
             dw swap,over,at,plus,swap,store,exit
 
+; cell+ ( a --  )
+; Add cell size in bytes to address
+_cellp      dw _pstore
+            db 5,'cell+'
+cellp       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,2,plus,exit
+
+; ?dup ( w -- w w | 0 )
+; Duplicate item if its is not zero
+_qdup       dw _cellp
+            db 4,'?dup'
+qdup        mov t0,pc+4
+            mov pc,dolist
+            dw dup,qbranch,qdup1,dup
+qdup1       dw exit
+
+; 'eval ( -- a )
+; Return address of variable 'eval (execution vector of eval)
+_teval      dw _qdup
+            db 5,39,'eval'
+teval       mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0,exit
+
+; $interpret ( a -- )
+; Interpret a word. If failed, try to convert it to an integer
+_interpret  dw _teval
+            db 10,'$interpret'
+interpret   mov t0,pc+4
+            mov pc,dolist
+
+
 ; [ ( -- )
 ; Start the text interpreter
-_lbrac      dw _pstore
-            db 1,'['
+_lbrac      dw _interpret
+            db 0x41,'['
 lbrac       mov t0,pc+4
             mov pc,dolist
-            dw exit
+            dw dolit,interpret,teval,store,exit
 
 ; tib> ( -- F | c T)
 ; Return true and the next character from the input buffer or false if the buffer is empty
@@ -1169,18 +1180,95 @@ parse3      dw tibfrom,qbranch,parse4           ; Read next character, branch if
             dw onep,branch,parse3               ; Increment character count
 parse4      dw rfrom,drop,exit                  ; Remove delimiter from return stack       
 
+; cmove ( b1 b2 u -- )
+; Copy u bytes from b1 to b2
+
+_cmove      dw _parse
+            db 5,'cmove'
+cmove       mov t0,pc+4
+            mov pc,dolist
+            dw tor
+            dw branch,cmove2
+cmove1      dw tor,dup,cat
+            dw rat,cstore,onep
+            dw rfrom,onep
+cmove2      dw donext,cmove1
+            dw ddrop,exit
+
+; pack$ ( b u a -- a )
+; Build a counted string with u characters from b
+
+_packs      dw _cmove
+            db 5,'pack$'
+packs       mov t0,pc+4
+            mov pc,dolist
+            dw dup,tor              ; Save address of word buffer
+            dw ddup,cstore          ; Store the character count first
+            dw onep,ddup,plus       ; Go to the end of the string
+            dw dolit,0,swap,store   ; Fill then end with 0's
+            dw swap,cmove           ; Copy the string
+            dw rfrom,exit           ; Leave only the buffer address
+
+; word ( c -- a )
+; Parse a word from the input stream and copy to the dictionary
+_word       dw _packs
+            db 4,'word'
+word        mov t0,pc+4
+            mov pc,dolist
+            dw parse,here,packs,exit
+
+; atexecute ( a -- )
+; Execute vector stored in address a
+_atexecute  dw _word
+            db 8,'@execute'
+atexecute   mov t0,pc+4
+            mov pc,dolist
+            dw at,qdup              ; Addrees or 0?
+            dw qbranch,atexecute1   ; Exit if 0
+            dw execute              ; Execute if not 0
+atexecute1  dw exit
+
+; qstack
+; Abort if the data stack underflows
+_qstack     dw _atexecute
+            db 6,'?stack'
+qstack      mov t0,pc+4
+            mov pc,dolist
+            dw exit
+
+; eval ( -- )
+; Interpret the input stream
+_eval       dw _qstack
+            db 4,'eval'
+eval        mov t0,pc+4
+            mov pc,dolist
+eval1       dw bl,word,dup,cat        ; Parse a word
+            dw qbranch,eval2          ; Branch if character count is 0
+            dw teval,atexecute,qstack ; Evaluate and check for stack underflow
+            dw branch,eval1           ; Repeat until word gets a null string
+eval2       dw drop,exit              ; Discard string address and display prompt
+
+; catch ( a -- )
+; 
+_catch      dw _eval
+            db 5,'catch'
+catch       mov t0,pc+4
+            mov pc,dolist
+            dw
+
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-_quit       dw _parse
+_quit       dw _catch
             db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
-            dw rpsto,lbrac
-quit1       dw query,cr,bl,parse,type,cr,bl,parse,type,cr,branch,quit1
+            dw rpsto                  ; Reset stack pointer
+quit1       dw lbrac                  ; Start interpretation
+quit2       dw query                  ; Get input
+            dw dolit,eval,catch,qdup  ; Evaluate input
+            dw qbranch,quit2          ; Continue till error
 
-
-
-
+            dw exit
 
 endofdict   dw 0
 
