@@ -315,16 +315,39 @@ cat2        mov a>>,a
             mov a>>,a
             mov pc,t0
 
-; rp! ( -- )
-; Init return stack pointer
-_rpsto      dw _cat
+; rp! ( a -- )
+; Set the return stack pointer
+_rpstore    dw _cat
             db 3,'rp!'
-rpsto       mov rp,rp0
+rpstore     mov a,sp
+            mov rp,[a]
+            mov a+,#1
+            mov sp,a
+            mov pc,$next
+
+; rp0 ( -- a )
+; Stack initial return pointer value
+_rpzero     dw _rpstore
+            db 3,'rp0'
+rpzero      mov a,sp
+            mov a-,#1
+            mov sp,a
+            mov [a],rp0
+            mov pc,$next
+
+; rp@     ( -- a )
+; Push the current return stack pointer to the data stack
+_rpat       dw _rpzero
+            db 3,'rp@'
+rpat        mov a,sp
+            mov a-,#1
+            mov sp,a        ; Update stack pointer
+            mov [a],rp      ; Store rp to stack
             mov pc,$next
 
 ; r> ( -- w )
 ; Pop the return stack to the data stack
-_rfrom      dw _rpsto
+_rfrom      dw _rpat
             db 2,'r>'
 rfrom       mov a,rp
             mov t0,[a]      ; Read return stack to t0
@@ -362,16 +385,38 @@ tor         mov a,sp
             mov [a],t0      ; Store value to return stack
             mov pc,$next
 
-; sp! ( -- )
-; Init data stack pointer
-_spsto      dw _tor
+; sp! ( a -- )
+; Set the data stack pointer
+_spstore    dw _tor
             db 3,'sp!'
-spsto       mov sp,sp0
+spstore     mov a,sp
+            mov sp,[a]
+            mov pc,$next
+
+; sp0 ( a -- )
+; Initial data stack value
+_spzero     dw _spstore
+            db 3,'sp0'
+spzero      mov a,sp
+            mov a-,#1
+            mov sp,a
+            mov [a],sp0
+            mov pc,$next
+
+; sp@ ( -- a )
+; Push the current data stack pointer
+_spat       dw _spzero
+            dw 3,'sp@'
+spat        mov t0,sp       ; Current stack pointer
+            mov a,sp
+            mov a-,#1       ; Increment stack point   
+            mov sp,a
+            mov [a],t0      ; Store previous stack pointer on stack
             mov pc,$next
 
 ; drop ( w -- )
 ; Discard top stack item
-_drop       dw _spsto
+_drop       dw _spat
             db 4,'drop'
 drop        mov a,sp
             mov a+,#1
@@ -583,10 +628,11 @@ twom        mov a,sp
 ; The hi-level cold start sequence
 _cold       dw _twom
             db 4,'cold'
-cold        mov t0,pc+4
+cold        mov rp,rp0
+            mov sp,sp0
+            mov t0,pc+4
             mov pc,dolist
 
-            dw rpsto,spsto    ; Bodge for now
 
             
             dw dolit,10,base,store          ; Set decimal radix
@@ -595,15 +641,11 @@ cold        mov t0,pc+4
 
             dw cr,dotqp
             db 14,'eForth MISC-16'
-
-
-        
-            dw cr,quit
-
-
+            dw cr
 
             
-            dw cr,exit
+endlp       dw quit,branch,endlp
+
 
 ; cr ( -- )
 ; Output a carriage return and a line feed
@@ -1133,25 +1175,34 @@ teval       mov t0,pc+4
             mov pc,dolist
             dw dovar,0,exit
 
+; handler ( -- a )
+; Return address of variable handler ( holds the return stack pointer for error handling ) 
+_handler    dw _teval
+            db 7,'handler'
+handler     mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0,exit
+
 ; $interpret ( a -- )
 ; Interpret a word. If failed, try to convert it to an integer
-_interpret  dw _teval
+_interpret  dw _handler
             db 10,'$interpret'
 interpret   mov t0,pc+4
             mov pc,dolist
+            dw cr,count,type,exit
 
 
 ; [ ( -- )
 ; Start the text interpreter
-_lbrac      dw _interpret
+_lbracket   dw _interpret
             db 0x41,'['
-lbrac       mov t0,pc+4
+lbracket    mov t0,pc+4
             mov pc,dolist
             dw dolit,interpret,teval,store,exit
 
 ; tib> ( -- F | c T)
 ; Return true and the next character from the input buffer or false if the buffer is empty
-_tibfrom    dw _lbrac
+_tibfrom    dw _lbracket
             db 4,'tib>'
 tibfrom     mov t0,pc+4
             mov pc,dolist
@@ -1174,7 +1225,7 @@ parse1      dw tibfrom,qbranch,parse2           ; Read next character, branch if
             dw bl,xor,qbranch,parse1            ; Loop if character is space
             dw dolit,-1,inn,pstore              ; Backup parsing index to first character after spaces
 parse2      dw inn,at,tib,plus                  ; Address of start of string
-            dw dolit,0                          ; Initilize character count
+            dw dolit,0                          ; Initialize character count
 parse3      dw tibfrom,qbranch,parse4           ; Read next character, branch if buffer empty
             dw rat,xor,qbranch,parse4           ; Branch if delimeter
             dw onep,branch,parse3               ; Increment character count
@@ -1248,13 +1299,20 @@ eval1       dw bl,word,dup,cat        ; Parse a word
             dw branch,eval1           ; Repeat until word gets a null string
 eval2       dw drop,exit              ; Discard string address and display prompt
 
-; catch ( a -- )
-; 
+; catch ( ca -- 0 | err# )
+; Execute word at ca and set up an error frame for it
+
 _catch      dw _eval
             db 5,'catch'
 catch       mov t0,pc+4
             mov pc,dolist
-            dw
+            dw spat,tor               ; Save current stack pointer on return stack
+            dw handler,at,tor         ; Save handler pointer on return stack
+            dw rpat,handler,store     ; Save the handler frame pointer in handler
+            dw execute                ; Execute ca
+            dw rfrom,handler,store    ; Restore handler from return stack
+            dw rfrom,drop,            ; Discard the saved data stack pointer
+            dw dolit,0,exit           ; Push 0 for no error
 
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
@@ -1262,8 +1320,8 @@ _quit       dw _catch
             db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
-            dw rpsto                  ; Reset stack pointer
-quit1       dw lbrac                  ; Start interpretation
+            dw rpzero,rpstore         ; Reset stack pointer
+quit1       dw lbracket               ; Start interpretation
 quit2       dw query                  ; Get input
             dw dolit,eval,catch,qdup  ; Evaluate input
             dw qbranch,quit2          ; Continue till error
