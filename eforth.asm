@@ -119,21 +119,6 @@ donext2     mov a-,#1           ; Decrement RP (remove index from return stack)
             mov ip,a
             mov pc,$next        ; Execute next word on list
 
-; dovar ( -- a )
-; Return the address of a variable
-
-dovar       mov a,ip
-            mov a+,a
-            mov t0,a
-            mov a,ip
-            mov a+,#1
-            mov ip,a
-            mov a,sp
-            mov a-,#1
-            mov sp,a
-            mov [a],t0
-            mov pc,$next
-
 ; ?branch ( f -- )
 ; Branch if flag is zero
 
@@ -624,9 +609,17 @@ twom        mov a,sp
             mov [a],t0
             mov pc,$next
 
+; dovar ( -- a )
+; Run time routine for variable and create
+_dovar      dw _twom
+            db 5,'dovar'
+dovar       mov t0,pc+4
+            mov pc,dolist
+            dw rfrom,twom,exit
+
 ; cold ( -- )
 ; The hi-level cold start sequence
-_cold       dw _twom
+_cold       dw _dovar
             db 4,'cold'
 cold        mov rp,rp0
             mov sp,sp0
@@ -642,6 +635,7 @@ cold        mov rp,rp0
             dw cr,dotqp
             db 14,'eForth MISC-16'
             dw cr
+
 
             
 endlp       dw quit,branch,endlp
@@ -707,28 +701,28 @@ dotqp       mov t0,pc+4
             dw dostr,count,type,exit
 
 ; base ( -- a )
-; Return address of variable 'base' (radix for numeric I/O)
+; Variable base (radix for numeric I/O)
 _base       dw _dotqp
             db 4,'base'
 base        mov t0,pc+4
             mov pc,dolist
-            dw dovar,0,exit
+            dw dovar,0
 
 ; hld ( -- a )
-; Return address of variable 'hld' (hold address used during construction of numeric output strings)
+; Variable hld (hold address used during construction of numeric output strings)
 _hld        dw _base
             db 3,'hld'
 hld         mov t0,pc+4
             mov pc,dolist
-            dw dovar,0,exit
+            dw dovar,0
 
 ; dp ( -- a )
-; Return address of variable 'dp' (Dictionary Pointer, next free address in dictionary)
+; Variable dp (Dictionary Pointer, next free address in dictionary)
 _dp         dw _hld
             db 2,'dp'
 dp          mov t0,pc+4
             mov pc,dolist
-            dw dovar,0,exit
+            dw dovar,0
 
 ; here ( -- a )
 ; Return next free address in dictionary
@@ -1059,12 +1053,12 @@ tibl        mov t0,pc+4
             dw dolit,sp,twom,tib,sub,exit
 
 ; #tib ( -- a )
-; Return address of variable '#tib' (the current count of the terminal input buffer)
+; Variable #tib (the current count of the terminal input buffer)
 _ntib       dw _tibl
             db 4,'#tib'
 ntib        mov t0,pc+4
             mov pc,dolist
-            dw dovar,0,exit
+            dw dovar,0
 
 ; ^h ( bot eot cur -- bot eot cur )
 ; Backup the cursor by one character
@@ -1126,12 +1120,12 @@ accept3     dw branch,accept1
 accept4     dw drop,over,sub,exit
 
 ; >in ( -- a )
-; Return address of variable 'in' (character pointer while parsing input stream)
+; Variable >in (character pointer while parsing input stream)
 _inn        dw _accept
             db 2,'>in'
 inn         mov t0,pc+4
             mov pc,dolist
-            dw dovar,0,exit
+            dw dovar,0
 
 ; query ( -- )
 ; Accept input stream to terminal input buffer and initialize parsing pointer
@@ -1168,20 +1162,20 @@ qdup        mov t0,pc+4
 qdup1       dw exit
 
 ; 'eval ( -- a )
-; Return address of variable 'eval (execution vector of eval)
+; Variable 'eval (execution vector of eval)
 _teval      dw _qdup
             db 5,39,'eval'
 teval       mov t0,pc+4
             mov pc,dolist
-            dw dovar,0,exit
+            dw dovar,0
 
 ; handler ( -- a )
-; Return address of variable handler ( holds the return stack pointer for error handling ) 
+;Variable handler ( holds the return stack pointer for error handling ) 
 _handler    dw _teval
             db 7,'handler'
 handler     mov t0,pc+4
             mov pc,dolist
-            dw dovar,0,exit
+            dw dovar,0
 
 ; $interpret ( a -- )
 ; Interpret a word. If failed, try to convert it to an integer
@@ -1327,6 +1321,7 @@ quit2       dw query                  ; Get input
             dw qbranch,quit2          ; Continue till error
 
             dw exit
+
 
 endofdict   dw 0
 
