@@ -633,7 +633,7 @@ cold        mov rp,rp0
 
             dw dolit,_quit,twom,last,store,overt
 
-
+           
             
 
             dw cr,dotqp
@@ -816,9 +816,52 @@ ddrop       mov t0,pc+4
             mov pc,dolist
             dw drop,drop,exit
 
+; um* ( u u -- ud)
+; Unsigned multiply. Return double product
+            dw _ddrop
+_umstar     db 3,'um*'
+umstar      mov a,sp
+            mov t0,[a]
+            mov a+,#1
+            mov t1,[a]
+            mov t2,#0
+            mov t3,#16          ; Setup 16 interation loop
+umstar1     mov a,t2            ; Left shift t1:t2 into carry
+            mov a+,t2
+            mov t2,a
+            mov a,t1
+            mov pcc,pc+6
+            mov a+,t1
+            mov pc,pc+6
+            mov a+,t1
+            mov a|,#1
+            mov t1,a
+            mov pcc,pc+4        ; If carry
+            mov pc,#umstar2
+            mov a,t0            ; Add t0 to t2
+            mov a+,t2
+            mov t2,a
+            mov pcc,pc+4        ; If carry
+            mov pc,#umstar2    
+            mov a,t1            ; Add 1 to t1
+            mov a+,#1
+            mov t1,a
+umstar2     mov a,t3            ; Decrement t3
+            mov a-,#1
+            mov pcz,pc+6        ; If not zero
+            mov t3,a
+            mov pc,#umstar1     ; Loop
+            mov a,sp
+            mov [a],t1          ; Copy MS of product to top of stack
+            mov a+,#1
+            mov [a],t2          ; Copy LS of prodyct to next on stack
+            mov pc,$next
+#umstar1    dw umstar1
+#umstar2    dw umstar2
+
 ; um/mod ( udl udh u -- ur uq )
 ; Unsigned divide of a double by a single. Return mod and quotient
-            dw _ddrop
+            dw _umstar
 _ummod      db 6,'um/mod'
 ummod       mov a,sp
             mov t0,[a]      ; u
@@ -826,8 +869,7 @@ ummod       mov a,sp
             mov t1,[a]      ; udh
             mov a+,#1
             mov t2,[a]      ; udl
-            mov a,#16       ; Setup 16 interation loop
-            mov t3,a
+            mov t3,#16      ; Setup 16 interation loop
 um1         mov a,t1        ; Left shift udh
             mov a+,t1
             mov t1,a
@@ -860,9 +902,17 @@ um2         mov a,t3        ; Decrement loop counter
 #um1        dw um1            
 #um2        dw um2
 
+; * ( u u -- u )
+; Multiply two items to produce a signed single integer product
+            dw _ummod
+_star       db 1,'*'
+star        mov t0,pc+4
+            mov pc,dolist
+            dw umstar,drop,exit
+
 ; < ( n1 n2 -- t )
 ; Signed compare of top two items
-            dw _ummod
+            dw _star
 _less       db 1,'<'
 less        mov t0,pc+4
             mov pc,dolist
@@ -878,7 +928,7 @@ _digit      db 5,'digit'
 digit       mov t0,pc+4
             mov pc,dolist
             dw dolit,9,over,less
-            dw dolit,7,and,plus
+            dw dolit,39,and,plus
             dw dolit,'0',plus,exit
 
 ; extract ( n base -- n c )
@@ -1219,9 +1269,50 @@ overt       mov t0,pc+4
             mov pc,dolist
             dw last,at,context,store,exit
 
+; digit?  ( c base -- u t )
+; Convert a character to its numeric value. A flag indicates success
+            dw _overt
+_digitq     db 6,'digit?'
+digitq      mov t0,pc+4
+            mov pc,dolist
+            dw tor,dolit,'0',sub
+            dw dolit,9,over,less
+            dw qbranch,digitq1
+            dw dolit,39,sub
+            dw dup,dolit,10,less,or
+digitq1     dw dup,rfrom,uless,exit
+
+; number? ( a -- n T | a F )
+; Convert a number string to integer. Push a flag on tos
+            dw _digitq
+_numberq    db 7,'number?'
+numberq     mov t0,pc+4
+            mov pc,dolist
+            dw base,at,tor,dolit,0,over,count
+            dw over,cat,dolit,'$',equal
+            dw qbranch,numberq1
+            dw hex,swap,onep,swap,onem
+numberq1    dw over,cat,dolit,'-',equal,tor        
+            dw swap,rat,sub,swap,rat,plus,qdup
+            dw qbranch,numberq6
+            dw onem,tor
+numberq2    dw dup,tor,cat,base,at,digitq
+            dw qbranch,numberq4
+            dw swap,base,at,star,plus,rfrom
+            dw onep,donext,numberq2
+            dw rat,swap,drop
+            dw qbranch,numberq3
+            dw negate
+numberq3    dw swap
+            dw branch,numberq5
+numberq4    dw rfrom,rfrom,ddrop,ddrop,dolit,0
+numberq5    dw dup
+numberq6    dw rfrom,ddrop
+            dw rfrom,base,store,exit
+
 ; cfa ( na -- ca )
 ; Return code address from name address
-            dw _overt
+            dw _numberq
 _cfa        db 3,'cfa'
 cfa         mov t0,pc+4
             mov pc,dolist
@@ -1272,7 +1363,11 @@ interpret   mov t0,pc+4
 
             dw drop,execute,exit
 
-interpret1  dw dolit,2,spaces,count,type,dotqp
+interpret1  dw numberq,qbranch,interpret2
+
+            dw exit
+
+interpret2  dw dolit,2,spaces,count,type,dotqp
             db 2,' ?'
             dw exit
 
