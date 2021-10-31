@@ -639,7 +639,7 @@ cold        mov rp,rp0
             dw cr,dotqp
             db 14,'eForth MISC-16'
             
-            dw cr
+            
 
 
 
@@ -1432,7 +1432,7 @@ interpret1  dw numberq,qbranch,interpret2
 
 interpret2  dw space,count,type,dotqp
             db 2,' ?'
-            dw exit
+            dw quit,exit
 
 ; [ ( -- )
 ; Start the text interpreter
@@ -1527,7 +1527,11 @@ atexecute1  dw exit
 _qstack     db 6,'?stack'
 qstack      mov t0,pc+4
             mov pc,dolist
-            dw exit
+            dw depth,zless              ; Stack depth < 0?
+            dw qbranch,qstack1,dotqp    ; Yes, display error message
+            db 16,' stack underflow'
+            dw spzero,spstore,quit      ; Reset stack pointer
+qstack1     dw exit
 
 ; eval ( -- )
 ; Interpret the input stream
@@ -1542,7 +1546,7 @@ eval1       dw bl,word,dup,cat        ; Parse a word
 eval2       dw drop,exit              ; Discard string address and display prompt
 
 ; words ( -- )
-; List all words in dictionary without splitting words at line breaks
+; List all words in dictionary avoiding splitting words at line breaks
             dw _eval
 _words      db 5,'words'
 words       mov t0,pc+4
@@ -1569,7 +1573,7 @@ _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
             dw rpzero,rpstore         
-
+            dw cr
             dw lbracket               ; Start interpretation
 quit1       
             dw query,eval             ; Get and evaluate input
