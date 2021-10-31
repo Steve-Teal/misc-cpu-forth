@@ -785,14 +785,24 @@ not         mov t0,pc+4
 ; negate ( w -- -w)
 ; Two's complement top item
             dw _not
-_negate     db 5,'negate'
+_negate     db 6,'negate'
 negate      mov t0,pc+4
             mov pc,dolist
             dw not,onep,exit
 
+; dnegate ( d -- -d)
+; Two's compliment top two items as a double integer
+            dw _negate
+_dnegate    db 7,'dnegate'
+dnegate     mov t0,pc+4
+            mov pc,dolist
+            dw not,tor,not          ; Complement 
+            dw dolit,1,uplus        ; Add 1 to low item
+            dw rfrom,plus,exit      ; Add carry to high item
+
 ; - ( w1 w2 -- w1-w2  )
 ; Subtract the top two items
-            dw _negate
+            dw _dnegate
 _sub        db 1,'-'
 sub         mov t0,pc+4
             mov pc,dolist
@@ -910,9 +920,62 @@ star        mov t0,pc+4
             mov pc,dolist
             dw umstar,drop,exit
 
+; m* ( n n -- d )
+; Signed multiply return double product
+            dw _star
+_mstar      db 2,'m*'
+            mov t0,pc+4
+            mov pc,dolist
+            dw ddup,xor,zless,tor
+            dw abs,swap,abs,umstar
+            dw rfrom,qbranch,mstar1
+            dw dnegate
+mstar1      dw exit
+
+; m/mod ( d n -- r q )
+; Signed floored divide of double by single. Return mod and quotient.
+            dw _mstar
+_msmod      db 5,'m/mod'
+msmod       mov t0,pc+4
+            mov pc,dolist
+            dw dup,zless,dup,tor
+            dw qbranch,msmod1
+            dw negate,tor,dnegate,rfrom
+msmod1      dw tor,dup,zless
+            dw qbranch,msmod2
+            dw rat,plus
+msmod2      dw rfrom,ummod,rfrom
+            dw qbranch,msmod3
+            dw swap,negate,swap
+msmod3      dw exit
+
+; /mod ( n n -- r q )
+; Signed divide. Return mod and quotient
+            dw _msmod
+_slmod      db 4,'/mod'
+slmod       mov t0,pc+4
+            mov pc,dolist
+            dw over,zless,swap,msmod,exit
+
+; mod ( n n -- r )
+; Signed divide. Return mod only
+            dw _slmod
+_mod        db 3,'mod'
+mod         mov t0,pc+4
+            mov pc,dolist
+            dw slmod,drop,exit
+
+; / ( n n -- q )
+; Signed divide. Return quotient only
+            dw _mod
+_slash      db 1,'/'
+slash       mov t0,pc+4
+            mov pc,dolist
+            dw slmod,swap,drop,exit
+
 ; < ( n1 n2 -- t )
 ; Signed compare of top two items
-            dw _star
+            dw _slash
 _less       db 1,'<'
 less        mov t0,pc+4
             mov pc,dolist
@@ -1020,7 +1083,7 @@ dot         mov t0,pc+4
             dw base,at,dolit,10,xor
             dw qbranch,dot1
             dw udot,exit
-dot1        dw str,space,type,exit
+dot1        dw str,type,space,exit
 
 ; ? ( a -- )
 ; Display the contents in a memory cell
@@ -1159,7 +1222,7 @@ ktap        mov t0,pc+4
             dw dolit,8,xor
             dw qbranch,ktap2
             dw bl,tap,exit
-ktap1       dw drop,swap,drop,dup,exit
+ktap1       dw space,drop,swap,drop,dup,exit
 ktap2       dw bksp,exit
 
 ; bl ( -- 32 )
@@ -1367,7 +1430,7 @@ interpret1  dw numberq,qbranch,interpret2
 
             dw exit
 
-interpret2  dw dolit,2,spaces,count,type,dotqp
+interpret2  dw space,count,type,dotqp
             db 2,' ?'
             dw exit
 
@@ -1478,9 +1541,30 @@ eval1       dw bl,word,dup,cat        ; Parse a word
             dw branch,eval1           ; Repeat until word gets a null string
 eval2       dw drop,exit              ; Discard string address and display prompt
 
+; words ( -- )
+; List all words in dictionary without splitting words at line breaks
+            dw _eval
+_words      db 5,'words'
+words       mov t0,pc+4
+            mov pc,dolist
+            dw cr,context,at        ; End of dictionary
+            dw dolit,0,tor          ; Track characters on current line
+words1      dw qdup,qbranch,words2  ; Branch if start of dictionary
+            dw dup,count            ; Get string length byte
+            dw dolit,0x3f,and       ; Mask immediate and compile flags
+            dw dup,rfrom,plus       ; Add character count to tracking count
+            dw dolit,64,over,less   ; Less than width of terminal?
+            dw qbranch,words3       
+            dw drop,cr,dup          ; Yes, start new line and set tracking count to length of word
+words3      dw onep,tor             ; Update tracking count and add one for space
+            dw type,space           ; Display word followed by space
+            dw cellm,at,twom        ; Move to next word in dictionary
+            dw branch,words1        
+words2      dw rfrom,drop,exit      ; Drop tracking count and exit
+
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _eval
+            dw _words
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
@@ -1490,11 +1574,8 @@ quit        mov t0,pc+4
 quit1       
             dw query,eval             ; Get and evaluate input
             dw dotqp
-            db 4,'  ok'
+            db 3,' ok'
             dw cr,branch,quit1           ; Continue till error
-
-
-
 
 
 endofdict   dw 0
