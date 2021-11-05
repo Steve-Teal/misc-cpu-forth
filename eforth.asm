@@ -683,14 +683,25 @@ plus        mov t0,pc+4
             mov pc,dolist
             dw uplus,drop,exit
 
+; >char ( n -- char )
+; Convert n to a printable character
+            dw _plus
+_tochar     db 5,'>char'
+tochar      mov t0,pc+4
+            mov pc,dolist
+            dw dup,dolit,0x7f,bl,within
+            dw qbranch,tochar1
+            dw drop,dolit,'.'
+tochar1     dw exit
+    
 ; type ( b u -- )
 ; Output u characters from b
-            dw _plus
+            dw _tochar
 _type       db 4,'type'
 type        mov t0,pc+4
             mov pc,dolist
             dw tor,branch,type2
-type1       dw dup,cat,emit,onep
+type1       dw dup,cat,tochar,emit,onep
 type2       dw donext,type1,drop,exit
 
 ; count ( b - b+1 u )
@@ -1300,9 +1311,17 @@ qdup        mov t0,pc+4
             dw dup,qbranch,qdup1,dup
 qdup1       dw exit
 
+; rot ( w1 w2 w3 -- w2 w3 w1 )
+;
+            dw _qdup
+_rot        db 3,'rot'
+rot         mov t0,pc+4
+            mov pc,dolist
+            dw tor,swap,rfrom,swap,exit
+
 ; 'eval ( -- a )
 ; Variable 'eval (execution vector of eval)
-            dw _qdup
+            dw _rot
 _teval      db 5,39,'eval'
 teval       mov t0,pc+4
             mov pc,dolist
@@ -1424,7 +1443,13 @@ interpret   mov t0,pc+4
             
             dw nameq,qdup,qbranch,interpret1
 
-            dw drop,execute,exit
+            dw cat,dolit,0x80,and,qbranch,interpret3
+
+            dw dotqp
+            db 12,'compile only'
+            dw drop,quit
+
+interpret3  dw execute,exit
 
 interpret1  dw numberq,qbranch,interpret2
 
@@ -1432,7 +1457,7 @@ interpret1  dw numberq,qbranch,interpret2
 
 interpret2  dw space,count,type,dotqp
             db 2,' ?'
-            dw quit,exit
+            dw quit
 
 ; [ ( -- )
 ; Start the text interpreter
@@ -1566,9 +1591,43 @@ words3      dw onep,tor             ; Update tracking count and add one for spac
             dw branch,words1        
 words2      dw rfrom,drop,exit      ; Drop tracking count and exit
 
+
+; dm+ ( b u -- b+u )
+; Display 16 bytes from address b. Return new address b+16 for the next dm+.
+            dw _words
+_dmplus     db 3,'dm+'
+dmplus      mov t0,pc+4
+            mov pc,dolist
+            dw over,dolit,5
+            dw udotr,space
+            dw tor,branch,dmplus2
+dmplus1     dw count
+
+
+            dw dolit,0xff,and
+            dw bdigs,dig,dig,edigs
+            dw type,space
+
+dmplus2     dw donext,dmplus1
+            dw exit
+
+; dump ( b -- )
+; Display 256 bytes from address b. A line begins with an address, followed by 16 bytes in hex and 16 bytes in ASCII.
+            dw _dmplus
+_dump       db 4,'dump'
+            mov t0,pc+4
+            mov pc,dolist
+            dw dolit,0x10,tor
+            dw branch,dump2
+dump1       dw cr,dolit,0x10
+            dw ddup,dmplus,rot,rot
+            dw space,type
+dump2       dw donext,dump1
+            dw drop,exit
+
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _words
+            dw _dump
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
