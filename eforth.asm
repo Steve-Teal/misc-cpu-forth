@@ -1669,9 +1669,51 @@ header2     dw rfrom,last,store         ; Restore previous last defined word
             dw drop                     ; Drop pointer to new word string
             dw dolit,0,exit             ; Return false
 
+; compile ( -- )
+; Compile the next address in colon list to the dictionary
+            dw _header
+_compile    db 0x87,'compile'
+compile     mov t0,pc+4
+            mov pc,dolist
+            dw rfrom,dup        ; Get the next word address in the list
+            dw twom,at,comma    ; Convert and compile address 
+            dw onep,tor,exit    ; Adjust return address
+
+; $dolist ( -- )
+; Compile dolist macro
+            dw _compile
+_$dolist    db 0x87,'$dolist'
+$dolist     mov t0,pc+4
+            mov pc,dolist
+            dw dolit,pc+4,comma
+            dw dolit,t0,comma        ; mov t0,pc+4
+            dw dolit,dolist,comma
+            dw dolit,pc,comma        ; mov pc,dolist
+            dw exit
+
+; create ( -- )
+; Compile a new array entry without allocating code space
+            dw _$dolist
+_create     db 6,'create'
+create      mov t0,pc+4
+            mov pc,dolist
+            dw header
+            dw qbranch,create1
+            dw $dolist
+            dw compile,dovar
+create1     dw exit
+
+; variable ( -- )
+; Compile a new variable initialized to 0
+            dw _create
+_variable   db 8,'variable'
+variable    mov t0,pc+4
+            mov pc,dolist
+            dw create,dolit,0,comma,exit
+
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _header
+            dw _variable
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
