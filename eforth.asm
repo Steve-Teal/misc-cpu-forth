@@ -1433,35 +1433,74 @@ nameq1      dw dup,qbranch,nameq2           ; Branch if start of dictionary reac
 nameq2      dw exit
 nameq3      dw cellm,at,twom,branch,nameq1  ; Move to next word in dictionary 
 
+; ; ( -- )
+; Terminate a colon definition
+            dw _nameq
+_semis      db 1,';'
+semis       mov t0,pc+4
+            mov pc,dolist
+            db 0xc1,';'
+            dw compile,exit
+            dw lbracket,overt
+            dw exit
+
+; literal ( w -- )
+; Compile top item to dictionary as an integer literal
+            dw _semis
+_literal    db 7,'literal'
+literal     mov t0,pc+4
+            mov pc,dolist
+            dw compile,dolit
+            dw comma,exit
+
 ; $interpret ( a -- )
 ; Interpret a word. If failed, try to convert it to an integer
-            dw _sameq
+            dw _literal
 _interpret  db 10,'$interpret'
 interpret   mov t0,pc+4
             mov pc,dolist
-
-            
             dw nameq,qdup,qbranch,interpret1
-
             dw cat,dolit,0x80,and,qbranch,interpret3
-
             dw dotqp
             db 12,'compile only'
             dw drop,quit
-
 interpret3  dw execute,exit
-
 interpret1  dw numberq,qbranch,interpret2
-
             dw exit
-
 interpret2  dw space,count,type,dotqp
             db 2,' ?'
             dw quit
 
+; $compile ( a -- )
+; Compile next word to dictionary as a token or literal
+            dw _interpret
+_scompile   db 8,'$compile'
+scompile    mov t0,pc+4
+            mov pc,dolist
+            dw nameq,qdup                   ; Defined?
+            dw qbranch,scompile2
+            dw cat,dolit,0x40,and           ; Immediate?
+            dw qbranch,scompile1
+            dw execute,exit                 ; Its immediate, execute
+scompile1   dw comma,exit                   ; Its not immediate, compile
+scompile2   dw numberq                      ; Number?
+            dw qbranch,scompile3     
+            dw literal,exit                 ; Its a number, compile
+scompile3   dw space,count,type,dotqp
+            db 2,' ?'
+            dw quit
+
+; ] ( -- )
+; Start compiling the words in the input stream
+            dw _scompile
+_rbracket   db 0x41,']'
+rbracket    mov t0,pc+4
+            mov pc,dolist
+            dw dolit,scompile,teval,store,exit
+
 ; [ ( -- )
 ; Start the text interpreter
-            dw _interpret
+            dw _rbracket
 _lbracket   db 0x41,'['
 lbracket    mov t0,pc+4
             mov pc,dolist
@@ -1697,23 +1736,37 @@ $dolist     mov t0,pc+4
 _create     db 6,'create'
 create      mov t0,pc+4
             mov pc,dolist
-            dw header
-            dw qbranch,create1
-            dw $dolist
-            dw compile,dovar
+            dw header               ; Create dictionary header with link and name fields
+            dw qbranch,create1      ; Branch if name was null
+            dw $dolist              ; Compile dolist macro in code field
+            dw compile,dovar        ; Compile dovar onto word list
 create1     dw exit
 
 ; variable ( -- )
-; Compile a new variable initialized to 0
+; Compile a new variable initialized to 0 using next word as its name
             dw _create
 _variable   db 8,'variable'
 variable    mov t0,pc+4
             mov pc,dolist
-            dw create,dolit,0,comma,exit
+            dw create              
+            dw dolit,0              
+            dw comma,exit
+
+; : ( -- )
+; Start a new colon definition using next word as its name
+            dw _variable
+_colon      db 1,':'
+colon       mov t0,pc+4
+            mov pc,dolist
+            dw header
+            dw qbranch,colon1
+            dw $dolist
+            dw rbracket
+colon1      dw exit
 
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _variable
+            dw _colon
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
