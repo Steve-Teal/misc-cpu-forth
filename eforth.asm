@@ -1591,43 +1591,87 @@ words3      dw onep,tor             ; Update tracking count and add one for spac
             dw branch,words1        
 words2      dw rfrom,drop,exit      ; Drop tracking count and exit
 
-
-; dm+ ( b u -- b+u )
-; Display 16 bytes from address b. Return new address b+16 for the next dm+.
+; dm+ ( a u -- a )
+; Display u bytes from a, leaving a+u on the stack
             dw _words
 _dmplus     db 3,'dm+'
 dmplus      mov t0,pc+4
             mov pc,dolist
-            dw over,dolit,5
-            dw udotr,space
-            dw tor,branch,dmplus2
-dmplus1     dw count
-
-
-            dw dolit,0xff,and
-            dw bdigs,dig,dig,edigs
-            dw type,space
-
-dmplus2     dw donext,dmplus1
+            dw over,dolit,5,udotr,space     ; Display address
+            dw tor,branch,dmplus2           ; Start for loop
+dmplus1     dw dup,cat                      ; Read byte
+            dw bdigs,dig,dig,edigs          ; Format 2 digit hex string
+            dw type,space                   ; Print formated string
+            dw onep                         ; Increment address
+dmplus2     dw donext,dmplus1               ; Next
             dw exit
 
 ; dump ( b -- )
 ; Display 256 bytes from address b. A line begins with an address, followed by 16 bytes in hex and 16 bytes in ASCII.
             dw _dmplus
 _dump       db 4,'dump'
-            mov t0,pc+4
+dump        mov t0,pc+4
             mov pc,dolist
-            dw dolit,0x10,tor
+            dw dolit,0x10,max               ; Keep addresses above 0x000F to avoid interfering with CPU
+            dw dolit,0x10,tor               ; Start for loop
             dw branch,dump2
-dump1       dw cr,dolit,0x10
+dump1       dw cr,dolit,0x10                ; Display row of bytes in 2 digit hex format
             dw ddup,dmplus,rot,rot
-            dw space,type
-dump2       dw donext,dump1
+            dw space,type                   ; Display row ASCII
+dump2       dw donext,dump1                 ; Next
             dw drop,exit
+
+; , ( w -- )
+; Compile an integer into the dictionary
+            dw _dump
+_comma      db 1,','
+comma       mov t0,pc+4
+            mov pc,dolist
+            dw here,dup,cellp
+            dw dp,store,store,exit
+
+; ?unique ( a -- a )
+; Display a warning message if the word already exists
+            dw _comma
+_qunique    db 7,'?unique'
+qunique     mov t0,pc+4
+            mov pc,dolist
+            dw dup,nameq
+            dw qbranch,qunique1
+            dw dotqp,
+            db 11,' redefined '
+            dw over,count,type
+qunique1    dw drop,exit
+
+; header ( -- F )
+; Create dictionary header from input buffer word. Return true if successfull.
+            dw _qunique
+_header     db 6,'header'
+header      mov t0,pc+4
+            mov pc,dolist
+            dw last,at,dup,tor          ; Save link to last defined word
+            dw twod,comma               ; Compile link field
+            dw here,last,store          ; Set new word as last defined word
+            dw bl,word                  ; Copy word from input buffer to top of dictionary
+            dw dup,cat                  ; Length of word string
+            dw qbranch,header2          ; Branch if null
+            dw qunique                  ; Display warning if word already exists in dictionary 
+            dw cat,here,plus,onep       ; Add new word string length onto top of dictionary pointer
+            dw dup,dolit,1,and          ; Is dictionary pointer is on a word boundry?
+            dw qbranch,header1
+            dw dolit,0            
+            dw over,cstore,onep         ; No, pad string with null and advance pointer by 1 
+header1     dw dp,store                 ; Store new end of dictionary pointer
+            dw overt                    ; Update context
+            dw rfrom,drop               ; Drop old last defined word pointer
+            dw dolit,-1,exit            ; Return true
+header2     dw rfrom,last,store         ; Restore previous last defined word
+            dw drop                     ; Drop pointer to new word string
+            dw dolit,0,exit             ; Return false
 
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _dump
+            dw _header
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
