@@ -1398,7 +1398,11 @@ numberq6    dw rfrom,ddrop
 _cfa        db 3,'cfa'
 cfa         mov t0,pc+4
             mov pc,dolist
-            dw dup,cat,plus,twod,onep,exit
+            dw dup,cat             ; Get length of name and flags
+            dw dolit,0x3f,and      ; Mask flags
+            dw plus                ; Add length to name address
+            dw twod,onep           ; Divide by two and round up
+            dw exit      
 
 ; sameq ( a a -- a a F )
 ; Compare two strings return true if they match 
@@ -1433,20 +1437,9 @@ nameq1      dw dup,qbranch,nameq2           ; Branch if start of dictionary reac
 nameq2      dw exit
 nameq3      dw cellm,at,twom,branch,nameq1  ; Move to next word in dictionary 
 
-; ; ( -- )
-; Terminate a colon definition
-            dw _nameq
-_semis      db 1,';'
-semis       mov t0,pc+4
-            mov pc,dolist
-            db 0xc1,';'
-            dw compile,exit
-            dw lbracket,overt
-            dw exit
-
 ; literal ( w -- )
 ; Compile top item to dictionary as an integer literal
-            dw _semis
+            dw _nameq
 _literal    db 7,'literal'
 literal     mov t0,pc+4
             mov pc,dolist
@@ -1752,9 +1745,33 @@ variable    mov t0,pc+4
             dw dolit,0              
             dw comma,exit
 
+; $," ( -- )
+; Compile a literal string up to next "
+            dw _variable
+_strcq      db 0x83,'$,"'
+strcq       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,'"',word       ; Move string to dictionary
+            dw count                ; Length of string
+            dw here,plus,onep       ; Add new word string length onto top of dictionary pointer
+            dw dup,dolit,1,and      ; Is dictionary pointer on a word boundry?
+            dw qbranch,strcq1
+            dw dolit,0            
+            dw over,cstore,onep     ; No, pad string with null and advance pointer by 1 
+strcq1      dw dp,store,exit        ; Update dictionary pointer
+
+; ." ( -- )
+; Compile an inline string literal to be typed out at run time
+            dw _strcq
+_dotq       db 0xc2,'."'
+dotq        mov t0,pc+4
+            mov pc,dolist
+            dw compile,dotqp
+            dw strcq,exit
+
 ; : ( -- )
 ; Start a new colon definition using next word as its name
-            dw _variable
+            dw _dotq
 _colon      db 1,':'
 colon       mov t0,pc+4
             mov pc,dolist
@@ -1764,9 +1781,19 @@ colon       mov t0,pc+4
             dw rbracket
 colon1      dw exit
 
+; ; ( -- )
+; Terminate a colon definition
+            dw _colon
+_semis      db 0xc1,';'
+semis       mov t0,pc+4
+            mov pc,dolist
+            dw compile,exit
+            dw lbracket
+            dw exit
+
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _colon
+            dw _semis
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
