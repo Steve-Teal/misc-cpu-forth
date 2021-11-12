@@ -1752,8 +1752,8 @@ _strcq      db 0x83,'$,"'
 strcq       mov t0,pc+4
             mov pc,dolist
             dw dolit,'"',word       ; Move string to dictionary
-            dw count                ; Length of string
-            dw here,plus,onep       ; Add new word string length onto top of dictionary pointer
+            dw count,swap,drop      ; Length of string, discard string address
+            dw here,plus,onep       ; Add count-string length to dictionary pointer
             dw dup,dolit,1,and      ; Is dictionary pointer on a word boundry?
             dw qbranch,strcq1
             dw dolit,0            
@@ -1791,9 +1791,28 @@ semis       mov t0,pc+4
             dw lbracket
             dw exit
 
+; if ( -- a )
+; Begin a conditional branch structure
+            dw _semis
+_if         db 0xc2,'if'
+if          mov t0,pc+4
+            mov pc,dolist
+            dw compile,qbranch
+            dw here
+            dw dolit,0,comma
+            dw exit
+
+; then ( a -- )
+; Terminate a conditional branch structure
+            dw _if
+_then       db 0xc4,'then'
+then        mov t0,pc+4
+            mov pc,dolist
+            dw here,twod,swap,store,exit
+
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _semis
+            dw _then
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
