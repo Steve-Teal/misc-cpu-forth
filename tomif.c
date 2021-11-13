@@ -12,7 +12,7 @@ void main(void)
     uint16_t ram[32768];
     int fs;
 
-    fp = fopen("kernl-misc-0-7-3.fi","rb");
+    fp = fopen("out.bin","rb");
     fs = fread(ram,sizeof(uint16_t),32768,fp);
     
     for(i=0;i<fs;i++)

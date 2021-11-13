@@ -1810,9 +1810,101 @@ then        mov t0,pc+4
             mov pc,dolist
             dw here,twod,swap,store,exit
 
+; ahead ( -- a )
+; Compile a forward branch instruction
+            dw _then
+_ahead      db 0xc5,'ahead'
+ahead       mov t0,pc+4
+            mov pc,dolist
+            dw compile,branch
+            dw here
+            dw dolit,0,comma
+            dw exit
+
+; else ( a -- a )
+; Start the false clause in an 'if-then-else' structure
+            dw _ahead
+_else       db 0xc4,'else'
+else        mov t0,pc+4
+            mov pc,dolist
+            dw ahead,swap,then,exit
+
+; for ( -- a )
+; Start a 'for-next' loop structure in a colon definition
+            dw _else
+_for        db 0xc3,'for'
+for         mov t0,pc+4
+            mov pc,dolist
+            dw compile,tor,here,exit
+
+
+; next    ( a -- )
+; Terminate a FOR-NEXT loop structure.
+            dw _for
+_next       db 0xc4,'next'
+next        mov t0,pc+4
+            mov pc,dolist
+            dw compile,donext
+            dw twod,comma
+            dw exit
+
+; begin ( -- a )
+; Start an infinite or indefinite loop structure
+            dw _next
+_begin      db 0xc5,'begin'
+begin       mov t0,pc+4
+            mov pc,dolist
+            dw here,exit
+
+; again ( a -- )
+; Terminate a begin-again infinite loop structure
+            dw _begin
+_again      db 0xc5,'again'
+again       mov t0,pc+4
+            mov pc,dolist
+            dw compile,branch
+            dw twod,comma
+            dw exit
+
+; until ( a -- )
+; Terminate a begin-until indefinite loop structure
+            dw _again
+_until      db 0xc5,'until'
+until       mov t0,pc+4
+            mov pc,dolist
+            dw compile,qbranch
+            dw twod,comma
+            dw exit
+
+; aft ( a -- a A )
+; Jump to then in a for-aft-then-next loop the first time through.
+            dw _until
+_aft        db 0xc3,'aft'
+aft         mov t0,pc+4
+            mov pc,dolist
+            dw drop,ahead
+            dw begin,swap
+            dw exit
+
+; repeat ( A a -- )
+; Terminate a begin-while-repeat indefinite loop
+            dw _aft
+_repeat     db 0xc6,'repeat'
+repeat      mov t0,pc+4
+            mov pc,dolist
+            dw again,here,twod,swap,store,exit
+
+; while ( a -- A a )
+; Conditional branch out of a begin-while-repeat loop
+            dw _repeat
+_while      db 0xc5,'while'
+while       mov t0,pc+4
+            mov pc,dolist
+            dw if,swap,exit
+
 ; quit ( -- )
 ; Reset return stack pointer and start text interpreter.
-            dw _then
+            dw _while
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist

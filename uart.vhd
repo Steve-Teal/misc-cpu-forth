@@ -68,7 +68,6 @@ u1:		fifo port map (
 	
 	tx_fifo_rd <= not (tx_fifo_empty or tx_running or tx_load_shifter);
 	
-	rx_ready <= '0'; -- Not used
 	
 	process(clock)
 	begin
@@ -178,8 +177,9 @@ u1:		fifo port map (
 		if rising_edge(clock) then
 			if rx_sample = '1' and rx_bit_counter = "1001" and rx_sync = '1' then
 				data_out <= rx_shifter;
+				rx_ready <= '0';
 			elsif rx_rd = '1' then
-				data_out <= X"00";
+				rx_ready <= '1';
 			end if;
 		end if;
 	end process;

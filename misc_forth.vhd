@@ -123,6 +123,8 @@ architecture rtl of misc_forth is
 	
 	signal hfcounter : integer range 0 to 25199;
 	
+	signal rx_ready : std_logic;
+	
 begin
 
 	pio(4) <= vsync;
@@ -172,7 +174,7 @@ u3:  uart port map (
 			tx_wr => uart_wr,
 			tx => utx,
 			rx => urx,
-			rx_ready => open,
+			rx_ready => rx_ready,
 			rx_rd => uart_rd);
 			
 u4:  pll port map (
@@ -219,14 +221,14 @@ u6: 	vram port map (
 			
 		
 	with address_reg select data <=
+		(15 downto 1 => '0') & rx_ready when x"FFFF",
 		(15 downto 8 => '0') & uart_data when X"FFFE",		
 		(15 downto 8 => '0') & led_reg when X"7FFF",
 		std_logic_vector(mscounter) when X"7FFD",
 		data_mux when others;
 	
 	memory_wr <= '1' when cpu_wr = '1' and address(15 downto 14) = "00" else '0';
-	uart_wr <= '1' when cpu_wr = '1' and address = X"FFFC" else '0';
-	--uart_rd <= '1' when cpu_rd = '1' and address_reg = X"FFFE" else '0';
+	uart_wr <= '1' when cpu_wr = '1' and address = X"FFFC" else '0';	
 	vram_address_mux <= vram_address when vram_rd = '1' else address(11 downto 0);
 	
 	vram_wr <= '1' when cpu_wr = '1' and address(15 downto 12) = "0100" else '0';
