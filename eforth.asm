@@ -304,35 +304,12 @@ cat2        mov a>>,a
 ; Set the return stack pointer
             dw _cat
 _rpstore    db 3,'rp!'
-rpstore     mov a,sp
-            mov rp,[a]
-            mov a+,#1
-            mov sp,a
-            mov pc,$next
-
-; rp0 ( -- a )
-; Stack initial return pointer value
-            dw _rpstore
-_rpzero     db 3,'rp0'
-rpzero      mov a,sp
-            mov a-,#1
-            mov sp,a
-            mov [a],rp0
-            mov pc,$next
-
-; rp@     ( -- a )
-; Push the current return stack pointer to the data stack
-            dw _rpzero
-_rpat       db 3,'rp@'
-rpat        mov a,sp
-            mov a-,#1
-            mov sp,a        ; Update stack pointer
-            mov [a],rp      ; Store rp to stack
+rpstore     mov rp,rp0
             mov pc,$next
 
 ; r> ( -- w )
 ; Pop the return stack to the data stack
-            dw _rpat
+            dw _rpstore
 _rfrom      db 2,'r>'
 rfrom       mov a,rp
             mov t0,[a]      ; Read return stack to t0
@@ -374,34 +351,12 @@ tor         mov a,sp
 ; Set the data stack pointer
             dw _tor
 _spstore    db 3,'sp!'
-spstore     mov a,sp
-            mov sp,[a]
-            mov pc,$next
-
-; sp0 ( a -- )
-; Initial data stack value
-            dw _spstore
-_spzero     db 3,'sp0'
-spzero      mov a,sp
-            mov a-,#1
-            mov sp,a
-            mov [a],sp0
-            mov pc,$next
-
-; sp@ ( -- a )
-; Push the current data stack pointer
-            dw _spzero
-_spat       db 3,'sp@'
-spat        mov t0,sp       ; Current stack pointer
-            mov a,sp
-            mov a-,#1       ; Increment stack point   
-            mov sp,a
-            mov [a],t0      ; Store previous stack pointer on stack
+spstore     mov sp,sp0
             mov pc,$next
 
 ; drop ( w -- )
 ; Discard top stack item
-            dw _spat
+            dw _spstore
 _drop       db 4,'drop'
 drop        mov a,sp
             mov a+,#1
@@ -712,9 +667,21 @@ count       mov t0,pc+4
             mov pc,dolist
             dw dup,onep,swap,cat,exit
 
+; allot ( n -- )
+; Allocate n bytes to the dictionary, if n is odd 1 will be added
+            dw _count
+_allot      db 5,'allot'
+allot       mov t0,pc+4
+            mov pc,dolist
+            dw dup,dolit,1,and      ; Is n odd?
+            dw qbranch,allot1
+            dw onep                 ; Yes, increment to make a even number of bytes
+allot1      dw dp,pstore            ; Update dictionary pointer
+            dw exit
+
 ; do$ ( -- b )
 ; Return the address of a compiled string
-            dw _count
+            dw _allot
 _dostr      db 0x83,'do$'
 dostr       mov t0,pc+4
             mov pc,dolist
@@ -935,7 +902,7 @@ star        mov t0,pc+4
 ; Signed multiply return double product
             dw _star
 _mstar      db 2,'m*'
-            mov t0,pc+4
+mstar       mov t0,pc+4
             mov pc,dolist
             dw ddup,xor,zless,tor
             dw abs,swap,abs,umstar
@@ -976,16 +943,54 @@ mod         mov t0,pc+4
             mov pc,dolist
             dw slmod,drop,exit
 
+
+; */mod ( n1 n2 n3 -- r q )
+; Multiply n1 and n2, then divide by n3. Return mod and quotient
+            dw _mod
+_ssmod      db 5,'*/mod'
+ssmod       mov t0,pc+4
+            mov pc,dolist
+            dw tor,mstar,rfrom,msmod,exit
+
+; */ ( n1 n2 n3 -- q )
+; Multiply n1 by n2, then divide by n3, return quotient only
+            dw _ssmod
+_stasl      db 2,'*/'
+stasl       mov t0,pc+4
+            mov pc,dolist
+            dw ssmod,swap,drop,exit
+
+; d+ ( d d -- d )
+; Double addition
+            dw _stasl
+_dplus      db 2,'d+'
+dplus       mov t0,pc+4
+            mov pc,dolist
+            dw tor,swap,tor,uplus
+            dw rfrom,rfrom,plus,plus,exit
+
+; fill ( b u c -- )
+; Fill u bytes of character c to area beginning at b.
+            dw _dplus
+_fill       db 4,'fill'
+fill        mov t0,pc+4
+            mov pc,dolist
+            dw swap,tor,swap
+            dw branch,fill2
+fill1       dw ddup,cstore,onep
+fill2       dw donext,fill1
+            dw ddrop,exit
+
 ; / ( n n -- q )
 ; Signed divide. Return quotient only
-            dw _mod
+            dw _fill
 _slash      db 1,'/'
 slash       mov t0,pc+4
             mov pc,dolist
             dw slmod,swap,drop,exit
 
 ; < ( n1 n2 -- t )
-; Signed compare of top two items
+; True if n1 less than n2
             dw _slash
 _less       db 1,'<'
 less        mov t0,pc+4
@@ -995,9 +1000,17 @@ less        mov t0,pc+4
             dw drop,zless,exit
 less1       dw sub,zless,exit
 
+; > ( n1 n2 -- t )
+; True if n1 greater than n2
+            dw _less
+_greater    db 1,'>'
+greater     mov t0,pc+4
+            mov pc,dolist
+            dw swap,less,exit
+            
 ; digit ( u -- c )
 ; Convert digit u to a character
-            dw _less
+            dw _greater
 _digit      db 5,'digit'
 digit       mov t0,pc+4
             mov pc,dolist
@@ -1587,7 +1600,7 @@ qstack      mov t0,pc+4
             dw depth,zless              ; Stack depth < 0?
             dw qbranch,qstack1,dotqp    ; Yes, display error message
             db 16,' stack underflow'
-            dw spzero,spstore,quit      ; Reset stack pointer
+            dw spstore,quit             ; Reset stack pointer
 qstack1     dw exit
 
 ; eval ( -- )
@@ -1653,9 +1666,24 @@ dump1       dw cr,dolit,0x10                ; Display row of bytes in 2 digit he
 dump2       dw donext,dump1                 ; Next
             dw drop,exit
 
+; .s ( ... -- ... )
+; Display the contents of the data stack.
+            dw _dump
+_dots       db 2,'.s'
+dots        mov t0,pc+4
+            mov pc,dolist
+            dw cr,depth             ; Get stack depth
+            dw tor                  ; Start for loop
+            dw branch,dots2         ; Skip first interation
+dots1       dw rat,pick,dot         ; Get stack item and display
+dots2       dw donext,dots1         ; Loop till done
+            dw dotqp
+            db 4,' <sp'
+            dw exit
+
 ; , ( w -- )
 ; Compile an integer into the dictionary
-            dw _dump
+            dw _dots
 _comma      db 1,','
 comma       mov t0,pc+4
             mov pc,dolist
@@ -1810,20 +1838,9 @@ then        mov t0,pc+4
             mov pc,dolist
             dw here,twod,swap,store,exit
 
-; ahead ( -- a )
-; Compile a forward branch instruction
-            dw _then
-_ahead      db 0xc5,'ahead'
-ahead       mov t0,pc+4
-            mov pc,dolist
-            dw compile,branch
-            dw here
-            dw dolit,0,comma
-            dw exit
-
 ; else ( a -- a )
 ; Start the false clause in an 'if-then-else' structure
-            dw _ahead
+            dw _then
 _else       db 0xc4,'else'
 else        mov t0,pc+4
             mov pc,dolist
@@ -1837,9 +1854,8 @@ for         mov t0,pc+4
             mov pc,dolist
             dw compile,tor,here,exit
 
-
 ; next    ( a -- )
-; Terminate a FOR-NEXT loop structure.
+; Terminate a for-next loop structure.
             dw _for
 _next       db 0xc4,'next'
 next        mov t0,pc+4
@@ -1894,9 +1910,20 @@ repeat      mov t0,pc+4
             mov pc,dolist
             dw again,here,twod,swap,store,exit
 
+; ahead ( -- a )
+; Compile a forward branch instruction
+            dw _repeat
+_ahead      db 0xc5,'ahead'
+ahead       mov t0,pc+4
+            mov pc,dolist
+            dw compile,branch
+            dw here
+            dw dolit,0,comma
+            dw exit
+
 ; while ( a -- A a )
 ; Conditional branch out of a begin-while-repeat loop
-            dw _repeat
+            dw _ahead
 _while      db 0xc5,'while'
 while       mov t0,pc+4
             mov pc,dolist
@@ -1908,7 +1935,7 @@ while       mov t0,pc+4
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
-            dw rpzero,rpstore         
+            dw rpstore         
             dw cr
             dw lbracket               ; Start interpretation
 quit1       

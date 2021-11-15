@@ -63,9 +63,6 @@ uint16_t read(uint16_t address)
         case 3: return pc + 6;
         case 7: return read(accu);
         case 8: return accu;
-        case 9: return sf;
-        case 10: return zf;
-        case 12: return cf;
         case 0xfffd: return 0; 
         case 0xfffe: return getkey();
         case 0xffff: return kbhit()?0:1;
@@ -114,7 +111,6 @@ void write(uint16_t address, uint16_t data)
         case 7: write(accu,data); return;
         case 8: writeAccu(data); return;
         case 9: writeAccu(sub(accu,data)); return;
-        case 10: writeAccu(sub(data,accu)); return;
         case 11: writeAccu(add(data,accu)); return;
         case 12: writeAccu(data ^ accu); return;
         case 13: writeAccu(data | accu); return;
