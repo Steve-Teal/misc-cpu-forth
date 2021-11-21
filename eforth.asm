@@ -1466,16 +1466,13 @@ _interpret  db 10,'$interpret'
 interpret   mov t0,pc+4
             mov pc,dolist
             dw nameq,qdup,qbranch,interpret1
-            dw cat,dolit,0x80,and,qbranch,interpret3
-            dw dotqp
+            dw cat,dolit,0x80,and
+            dw abortqp
             db 12,'compile only'
-            dw drop,quit
-interpret3  dw execute,exit
+            dw execute,exit
 interpret1  dw numberq,qbranch,interpret2
             dw exit
-interpret2  dw space,count,type,dotqp
-            db 2,' ?'
-            dw quit
+interpret2  dw error
 
 ; $compile ( a -- )
 ; Compile next word to dictionary as a token or literal
@@ -1598,9 +1595,8 @@ _qstack     db 6,'?stack'
 qstack      mov t0,pc+4
             mov pc,dolist
             dw depth,zless              ; Stack depth < 0?
-            dw qbranch,qstack1,dotqp    ; Yes, display error message
-            db 16,' stack underflow'
-            dw spstore,quit             ; Reset stack pointer
+            dw abortqp
+            db 10,' underflow'
 qstack1     dw exit
 
 ; eval ( -- )
@@ -1788,9 +1784,30 @@ strcq       mov t0,pc+4
             dw over,cstore,onep     ; No, pad string with null and advance pointer by 1 
 strcq1      dw dp,store,exit        ; Update dictionary pointer
 
+; abort"| ( f -- )
+; Run time routine of abort" Abort with a message.
+            dw _strcq
+_abortqp    db 0x87,'abort"|'
+abortqp     mov t0,pc+4
+            mov pc,dolist
+            dw qbranch,abortqp1     ; Branch if flag is false
+            dw dostr,count,type     ; Read and display error message
+            dw quit                 ; Restart text interpreter 
+abortqp1    dw dostr,drop,exit      ; Read a drop error message
+
+; error ( a -- )
+; Display error message in buffer at a and execute quit
+            dw _abortqp
+_error      db 5,'error'
+error       mov t0,pc+4
+            mov pc,dolist
+            dw space,count,type
+            dw dolit,'?',emit
+            dw quit
+
 ; ." ( -- )
 ; Compile an inline string literal to be typed out at run time
-            dw _strcq
+            dw _error
 _dotq       db 0xc2,'."'
 dotq        mov t0,pc+4
             mov pc,dolist
@@ -1910,9 +1927,22 @@ repeat      mov t0,pc+4
             mov pc,dolist
             dw again,here,twod,swap,store,exit
 
+; .ok ( -- )
+; Display 'ok' only while interpreting
+            dw _repeat
+_dotok      db 3,'.ok'
+dotok       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,interpret
+            dw teval,at,equal
+            dw qbranch,dotok1
+            dw dotqp
+            db 3,' ok'
+dotok1      dw exit
+
 ; ahead ( -- a )
 ; Compile a forward branch instruction
-            dw _repeat
+            dw _dotok
 _ahead      db 0xc5,'ahead'
 ahead       mov t0,pc+4
             mov pc,dolist
@@ -1930,20 +1960,16 @@ while       mov t0,pc+4
             dw if,swap,exit
 
 ; quit ( -- )
-; Reset return stack pointer and start text interpreter.
+; Reset return stack pointers and start text interpreter.
             dw _while
 _quit       db 4,'quit'
 quit        mov t0,pc+4
             mov pc,dolist
-            dw rpstore         
-            dw cr
+            dw rpstore,spstore        ; Reset stack pointers     
             dw lbracket               ; Start interpretation
-quit1       
-            dw query,eval             ; Get and evaluate input
-            dw dotqp
-            db 3,' ok'
-            dw cr,branch,quit1           ; Continue till error
-
+quit1       dw cr,query,eval          ; Get and evaluate input
+            dw dotok                  ; Display 'ok' if not compiling
+            dw branch,quit1           ; Continue till error
 
 endofdict   dw 0
 
