@@ -1795,9 +1795,18 @@ abortqp     mov t0,pc+4
             dw quit                 ; Restart text interpreter 
 abortqp1    dw dostr,drop,exit      ; Read a drop error message
 
+; abort" ( f -- )
+; Compile an inline string literal type at runtime and execute quit if flag is true
+            dw _abortqp
+_abortq     db 0xc6,'abort"'
+abortq      mov t0,pc+4
+            mov pc,dolist
+            dw compile,abortqp
+            dw strcq,exit
+
 ; error ( a -- )
 ; Display error message in buffer at a and execute quit
-            dw _abortqp
+            dw _abortq
 _error      db 5,'error'
 error       mov t0,pc+4
             mov pc,dolist
