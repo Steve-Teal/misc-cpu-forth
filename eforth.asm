@@ -1699,18 +1699,17 @@ qunique     mov t0,pc+4
             dw over,count,type
 qunique1    dw drop,exit
 
-; header ( -- F )
-; Create dictionary header from input buffer word. Return true if successfull.
+; header ( -- )
+; Create dictionary header from input buffer word. Abort if word is null
             dw _qunique
 _header     db 6,'header'
 header      mov t0,pc+4
             mov pc,dolist
-            dw last,at,dup,tor          ; Save link to last defined word
-            dw twod,comma               ; Compile link field
+            dw last,at,twod,comma       ; Compile link field             
             dw here,last,store          ; Set new word as last defined word
             dw bl,word                  ; Copy word from input buffer to top of dictionary
-            dw dup,cat                  ; Length of word string
-            dw qbranch,header2          ; Branch if null
+            dw dup,cat,zequal,abortqp   ; Abort if string length is null
+            db 5,' name'
             dw qunique                  ; Display warning if word already exists in dictionary 
             dw cat,here,plus,onep       ; Add new word string length onto top of dictionary pointer
             dw dup,dolit,1,and          ; Is dictionary pointer is on a word boundry?
@@ -1718,12 +1717,7 @@ header      mov t0,pc+4
             dw dolit,0            
             dw over,cstore,onep         ; No, pad string with null and advance pointer by 1 
 header1     dw dp,store                 ; Store new end of dictionary pointer
-            dw overt                    ; Update context
-            dw rfrom,drop               ; Drop old last defined word pointer
-            dw dolit,-1,exit            ; Return true
-header2     dw rfrom,last,store         ; Restore previous last defined word
-            dw drop                     ; Drop pointer to new word string
-            dw dolit,0,exit             ; Return false
+            dw exit                     ; Return true
 
 ; compile ( -- )
 ; Compile the next address in colon list to the dictionary
@@ -1754,10 +1748,10 @@ _create     db 6,'create'
 create      mov t0,pc+4
             mov pc,dolist
             dw header               ; Create dictionary header with link and name fields
-            dw qbranch,create1      ; Branch if name was null
             dw $dolist              ; Compile dolist macro in code field
             dw compile,dovar        ; Compile dovar onto word list
-create1     dw exit
+            dw overt                ; Link new word into the dictionary
+            dw exit
 
 ; variable ( -- )
 ; Compile a new variable initialized to 0 using next word as its name
@@ -1830,10 +1824,9 @@ _colon      db 1,':'
 colon       mov t0,pc+4
             mov pc,dolist
             dw header
-            dw qbranch,colon1
             dw $dolist
-            dw rbracket
-colon1      dw exit
+            dw rbracket            
+            dw exit
 
 ; ; ( -- )
 ; Terminate a colon definition
@@ -1843,6 +1836,7 @@ semis       mov t0,pc+4
             mov pc,dolist
             dw compile,exit
             dw lbracket
+            dw overt
             dw exit
 
 ; if ( -- a )
