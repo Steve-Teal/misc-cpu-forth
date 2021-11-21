@@ -667,9 +667,17 @@ count       mov t0,pc+4
             mov pc,dolist
             dw dup,onep,swap,cat,exit
 
+; char ( -- c )
+; Parse next word and return its first character.
+            dw _count
+_char       db 4,'char'
+char        mov t0,pc+4
+            mov pc,dolist
+            dw bl,parse,drop,cat,exit
+
 ; allot ( n -- )
 ; Allocate n bytes to the dictionary, if n is odd 1 will be added
-            dw _count
+            dw _char
 _allot      db 5,'allot'
 allot       mov t0,pc+4
             mov pc,dolist
@@ -1662,9 +1670,20 @@ dump1       dw cr,dolit,0x10                ; Display row of bytes in 2 digit he
 dump2       dw donext,dump1                 ; Next
             dw drop,exit
 
+; ' ( -- a )
+; Look up name in the dictionary return execution address.
+            dw _dump
+_tick       db 1,0x27
+tick        mov t0,pc+4
+            mov pc,dolist
+            dw bl,word,nameq
+            dw qbranch,tick1
+            dw exit
+tick1       dw error
+
 ; .s ( ... -- ... )
 ; Display the contents of the data stack.
-            dw _dump
+            dw _tick
 _dots       db 2,'.s'
 dots        mov t0,pc+4
             mov pc,dolist
@@ -1774,9 +1793,33 @@ constant    mov t0,pc+4
             dw compile,exit
             dw overt,exit
 
+; ( ( -- )
+; Ignore following string up to next ')' a comment.
+            dw _constant
+_paren      db 0x41,'('
+paren       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,')',parse,ddrop,exit
+
+; \  ( -- )
+; Ignore following text till the end of line.
+            dw _paren
+_backslash  db 0x41,'\'
+backslash   mov t0,pc+4
+            mov pc,dolist
+            dw ntib,at,inn,store,exit
+
+; .(  ( -- )
+; Output following string up to next )
+            dw _backslash
+_dotpr      db 0x42,'.('
+dotpr       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,')',parse,type,exit
+
 ; $," ( -- )
 ; Compile a literal string up to next "
-            dw _constant
+            dw _dotpr
 _strcq      db 0x83,'$,"'
 strcq       mov t0,pc+4
             mov pc,dolist
@@ -1789,9 +1832,23 @@ strcq       mov t0,pc+4
             dw over,cstore,onep     ; No, pad string with null and advance pointer by 1 
 strcq1      dw dp,store,exit        ; Update dictionary pointer
 
+; $"| ( -- a )
+; Run time routine compiled by $". Return address of a compiled string.
+strqp       mov t0,pc+4
+            mov pc,dolist
+            dw dostr,exit
+
+; $"  ( -- )
+; Compile an inline string literal.
+            dw _strcq
+_strq       db 0x42,'$"'
+strq        mov t0,pc+4
+            mov pc,dolist
+            dw compile,strqp,strcq,exit
+
 ; abort"| ( f -- )
 ; Run time routine of abort" Abort with a message.
-            dw _strcq
+            dw _strq
 _abortqp    db 0x87,'abort"|'
 abortqp     mov t0,pc+4
             mov pc,dolist
