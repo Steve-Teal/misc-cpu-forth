@@ -1763,9 +1763,20 @@ variable    mov t0,pc+4
             dw dolit,0              
             dw comma,exit
 
+; constant ( n -- )
+; Compile a new constant
+            dw _variable
+_constant   db 8,'constant'
+constant    mov t0,pc+4
+            mov pc,dolist
+            dw header,$dolist
+            dw compile,dolit,comma
+            dw compile,exit
+            dw overt,exit
+
 ; $," ( -- )
 ; Compile a literal string up to next "
-            dw _variable
+            dw _constant
 _strcq      db 0x83,'$,"'
 strcq       mov t0,pc+4
             mov pc,dolist
