@@ -60,3 +60,4 @@ max/
 *.bak
 *.cmp
 *.bin
+*.pyc
