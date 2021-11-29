@@ -119,7 +119,7 @@ donext2     mov a-,#1           ; Decrement RP (remove index from return stack)
             mov ip,a
             mov pc,$next        ; Execute next word on list
 
-; ?branch ( f -- )
+; ( f -- )
 ; Branch if flag is zero
 
 qbranch     mov a,sp
@@ -136,7 +136,7 @@ qbranch     mov a,sp
             mov ip,t1
             mov pc,$next
 
-; branch ( -- )
+; ( -- )
 ; Branch to an inline address
 
 branch      mov a,ip
@@ -300,16 +300,9 @@ cat2        mov a>>,a
             mov a>>,a
             mov pc,t0
 
-; rp! ( a -- )
-; Set the return stack pointer
-            dw _cat
-_rpstore    db 3,'rp!'
-rpstore     mov rp,rp0
-            mov pc,$next
-
 ; r> ( -- w )
 ; Pop the return stack to the data stack
-            dw _rpstore
+            dw _cat
 _rfrom      db 2,'r>'
 rfrom       mov a,rp
             mov t0,[a]      ; Read return stack to t0
@@ -347,16 +340,9 @@ tor         mov a,sp
             mov [a],t0      ; Store value to return stack
             mov pc,$next
 
-; sp! ( a -- )
-; Set the data stack pointer
-            dw _tor
-_spstore    db 3,'sp!'
-spstore     mov sp,sp0
-            mov pc,$next
-
 ; drop ( w -- )
 ; Discard top stack item
-            dw _spstore
+            dw _tor
 _drop       db 4,'drop'
 drop        mov a,sp
             mov a+,#1
@@ -564,17 +550,9 @@ twom        mov a,sp
             mov [a],t0
             mov pc,$next
 
-; dovar ( -- a )
-; Run time routine for variable and create
-            dw _twom
-_dovar      db 5,'dovar'
-dovar       mov t0,pc+4
-            mov pc,dolist
-            dw rfrom,twom,exit
-
 ; cold ( -- )
 ; The hi-level cold start sequence
-            dw _dovar
+            dw _twom
 _cold       db 4,'cold'
 cold        mov rp,rp0
             mov sp,sp0
@@ -637,21 +615,10 @@ _plus       db 1,'+'
 plus        mov t0,pc+4
             mov pc,dolist
             dw uplus,drop,exit
-
-; >char ( n -- char )
-; Convert n to a printable character
-            dw _plus
-_tochar     db 5,'>char'
-tochar      mov t0,pc+4
-            mov pc,dolist
-            dw dup,dolit,0x7f,bl,within
-            dw qbranch,tochar1
-            dw drop,dolit,'.'
-tochar1     dw exit
     
 ; type ( b u -- )
 ; Output u characters from b
-            dw _tochar
+            dw _plus
 _type       db 4,'type'
 type        mov t0,pc+4
             mov pc,dolist
@@ -687,42 +654,17 @@ allot       mov t0,pc+4
 allot1      dw dp,pstore            ; Update dictionary pointer
             dw exit
 
-; do$ ( -- b )
-; Return the address of a compiled string
-            dw _allot
-_dostr      db 0x83,'do$'
-dostr       mov t0,pc+4
-            mov pc,dolist
-            dw rfrom,rfrom,twom,dup,count,plus
-            dw onep,twod,tor,swap,tor,exit
-
-; ."| ( -- )
-; Output a compiled string; run time routine of ."
-            dw _dostr
-_dotqp      db 0x83,'."|'
-dotqp       mov t0,pc+4
-            mov pc,dolist
-            dw dostr,count,type,exit
-
 ; base ( -- a )
 ; Variable base (radix for numeric I/O)
-            dw _dotqp
+            dw _allot
 _base       db 4,'base'
 base        mov t0,pc+4
             mov pc,dolist
             dw dovar,0
 
-; hld ( -- a )
-; Variable hld (hold address used during construction of numeric output strings)
-            dw _base
-_hld        db 3,'hld'
-hld         mov t0,pc+4
-            mov pc,dolist
-            dw dovar,0
-
 ; dp ( -- a )
 ; Variable dp (Dictionary Pointer, next free address in dictionary)
-            dw _hld
+            dw _base
 _dp         db 2,'dp'
 dp          mov t0,pc+4
             mov pc,dolist
@@ -1016,28 +958,9 @@ greater     mov t0,pc+4
             mov pc,dolist
             dw swap,less,exit
             
-; digit ( u -- c )
-; Convert digit u to a character
-            dw _greater
-_digit      db 5,'digit'
-digit       mov t0,pc+4
-            mov pc,dolist
-            dw dolit,9,over,less
-            dw dolit,39,and,plus
-            dw dolit,'0',plus,exit
-
-; extract ( n base -- n c )
-; Extract the least significant digit from n
-            dw _digit
-_extract    db 7,'extract'
-extract     mov t0,pc+4
-            mov pc,dolist
-            dw dolit,0,swap,ummod
-            dw swap,digit,exit
-
 ; hold ( c -- )
 ; Insert a character into the numeric output string
-            dw _extract
+            dw _greater
 _hold       db 4,'hold'
 hold        mov t0,pc+4
             mov pc,dolist
@@ -1098,17 +1021,9 @@ abs         mov t0,pc+4
             dw negate
 abs1        dw exit
 
-; str ( n -- b u )
-; Convert a signed integer to a numeric string
-            dw _abs
-_str        db 3,'str'
-str         mov t0,pc+4
-            mov pc,dolist
-            dw dup,tor,abs,bdigs,digs,rfrom,sign,edigs,exit
-
 ; . ( w -- )
 ; Display an integer in free format, preceeded by a space
-            dw _str
+            dw _abs
 _dot        db 1,'.'
 dot         mov t0,pc+4
             mov pc,dolist
@@ -1207,59 +1122,9 @@ tib         mov t0,pc+4
             mov pc,dolist
             dw dolit,tibb,twom,exit
 
-; tibl ( -- n )
-; Return the length of the terminal input buffer
-            dw _tib
-_tibl       db 4,'tibl'
-tibl        mov t0,pc+4
-            mov pc,dolist
-            dw dolit,sp,twom,tib,sub,exit
-
-; #tib ( -- a )
-; Variable #tib (the current count of the terminal input buffer)
-            dw _tibl
-_ntib       db 4,'#tib'
-ntib        mov t0,pc+4
-            mov pc,dolist
-            dw dovar,0
-
-; ^h ( bot eot cur -- bot eot cur )
-; Backup the cursor by one character
-            dw _ntib
-_bksp       db 2,'^h'
-bksp        mov t0,pc+4
-            mov pc,dolist
-            dw tor,over,rfrom,swap,over,xor
-            dw qbranch,bksp1
-            dw dolit,8,dup,emit,space,emit
-            dw onem
-bksp1       dw exit
-
-; tap ( bot eot cur c -- bot eot cur )
-; Accept and echo the key stroke and bump the cursor
-            dw _bksp
-_tap        db 3,'tap'
-tap         mov t0,pc+4
-            mov pc,dolist
-            dw dup,emit,over,cstore,onep,exit
-
-; ktap ( bot eot cur c -- bot eot cur )
-; Process a key stroke, CR or backspace
-            dw _tap
-_ktap       db 4,'ktap'
-ktap        mov t0,pc+4
-            mov pc,dolist
-            dw dup,dolit,13,xor
-            dw qbranch,ktap1
-            dw dolit,8,xor
-            dw qbranch,ktap2
-            dw bl,tap,exit
-ktap1       dw space,drop,swap,drop,dup,exit
-ktap2       dw bksp,exit
-
 ; bl ( -- 32 )
 ; Return 32, the blank character
-            dw _ktap
+            dw _tib
 _bl         db 2,'bl'
 bl          mov t0,pc+4
             mov pc,dolist
@@ -1282,17 +1147,9 @@ accept2     dw ktap
 accept3     dw branch,accept1
 accept4     dw drop,over,sub,exit
 
-; >in ( -- a )
-; Variable >in (character pointer while parsing input stream)
-            dw _accept
-_inn        db 2,'>in'
-inn         mov t0,pc+4
-            mov pc,dolist
-            dw dovar,0
-
 ; query ( -- )
 ; Accept input stream to terminal input buffer and initialize parsing pointer
-            dw _inn
+            dw _accept
 _query      db 5,'query'
 query       mov t0,pc+4
             mov pc,dolist
@@ -1307,25 +1164,9 @@ pstore      mov t0,pc+4
             mov pc,dolist
             dw swap,over,at,plus,swap,store,exit
 
-; cell+ ( w -- w )
-; Add cell size in bytes to top item
-            dw _pstore
-_cellp      db 5,'cell+'
-cellp       mov t0,pc+4
-            mov pc,dolist
-            dw dolit,2,plus,exit
-
-; cell- ( w -- w )
-; Subtract cell size in bytes from top item
-            dw _cellp
-_cellm      db 5,'cell-'
-cellm       mov t0,pc+4
-            mov pc,dolist
-            dw dolit,2,sub,exit
-
 ; ?dup ( w -- w w | 0 )
 ; Duplicate item if its is not zero
-            dw _cellm
+            dw _pstore
 _qdup       db 4,'?dup'
 qdup        mov t0,pc+4
             mov pc,dolist
@@ -1340,54 +1181,9 @@ rot         mov t0,pc+4
             mov pc,dolist
             dw tor,swap,rfrom,swap,exit
 
-; 'eval ( -- a )
-; Variable 'eval (execution vector of eval)
-            dw _rot
-_teval      db 5,39,'eval'
-teval       mov t0,pc+4
-            mov pc,dolist
-            dw dovar,0
-
-; context ( -- a )
-; Variable context (Pointer to name field of last command in dictionary)
-            dw _teval
-_context    db 7,'context'
-context     mov t0,pc+4
-            mov pc,dolist
-            dw dovar,0
-
-; last ( -- a )
-; Variable last (Pointer to name field of last command in dictionary)
-            dw _context
-_last       db 4,'last'
-last        mov t0,pc+4
-            mov pc,dolist
-            dw dovar,0
-
-; overt ( -- )
-; Link a successfully defined word into the dictionary
-            dw _last
-_overt      db 5,'overt'
-overt       mov t0,pc+4
-            mov pc,dolist
-            dw last,at,context,store,exit
-
-; digit?  ( c base -- u t )
-; Convert a character to its numeric value. A flag indicates success
-            dw _overt
-_digitq     db 6,'digit?'
-digitq      mov t0,pc+4
-            mov pc,dolist
-            dw tor,dolit,'0',sub
-            dw dolit,9,over,less
-            dw qbranch,digitq1
-            dw dolit,39,sub
-            dw dup,dolit,10,less,or
-digitq1     dw dup,rfrom,uless,exit
-
 ; number? ( a -- n T | a F )
 ; Convert a number string to integer. Push a flag on tos
-            dw _digitq
+            dw _rot
 _numberq    db 7,'number?'
 numberq     mov t0,pc+4
             mov pc,dolist
@@ -1413,97 +1209,9 @@ numberq5    dw dup
 numberq6    dw rfrom,ddrop
             dw rfrom,base,store,exit
 
-; cfa ( na -- ca )
-; Return code address from name address
-            dw _numberq
-_cfa        db 3,'cfa'
-cfa         mov t0,pc+4
-            mov pc,dolist
-            dw dup,cat             ; Get length of name and flags
-            dw dolit,0x3f,and      ; Mask flags
-            dw plus                ; Add length to name address
-            dw twod,onep           ; Divide by two and round up
-            dw exit      
-
-; sameq ( a a -- a a F )
-; Compare two strings return true if they match 
-            dw _cfa
-_sameq      db 5,'same?'
-sameq       mov t0,pc+4
-            mov pc,dolist
-            dw over,over
-            dw dup,cat,dolit,0x3F,and,tor   ; Setup for loop with character count
-            dw branch,sameq2                ; Branch for first iteration
-sameq1      dw over,cat,over,cat            ; Get string characters
-            dw equal,qbranch,sameq3         ; Compare, branch if no match
-sameq2      dw onep,swap,onep               ; Increment pointers
-            dw donext,sameq1                ; Next
-            dw ddrop,dolit,-1,exit          ; Strings match, tidy up and return true
-sameq3      dw rfrom,drop                   ; Match failed, cleanup for loop
-            dw ddrop,dolit,0,exit           ; Strings don't match tidy up and return false
-
-; name? ( a -- ca na | a F )
-; Search dictionary for a string, return code and name field address if found else false
-            dw _sameq
-_nameq      db 5,'name?'
-nameq       mov t0,pc+4
-            mov pc,dolist
-            dw context,at                   ; Last word in dictionary
-nameq1      dw dup,qbranch,nameq2           ; Branch if start of dictionary reached
-            dw over,at,over,at              ; First two cells of strings
-            dw dolit,0x3fff,and             ; Mask dictionary string compile and immediate flags 
-            dw equal,qbranch,nameq3         ; Branch if first cells are not equal
-            dw sameq,qbranch,nameq3         ; Branch if strings don't match
-            dw swap,drop,dup,cfa,swap       ; Name found, drop search string and push code field address
-nameq2      dw exit
-nameq3      dw cellm,at,twom,branch,nameq1  ; Move to next word in dictionary 
-
-; literal ( w -- )
-; Compile top item to dictionary as an integer literal
-            dw _nameq
-_literal    db 7,'literal'
-literal     mov t0,pc+4
-            mov pc,dolist
-            dw compile,dolit
-            dw comma,exit
-
-; $interpret ( a -- )
-; Interpret a word. If failed, try to convert it to an integer
-            dw _literal
-_interpret  db 10,'$interpret'
-interpret   mov t0,pc+4
-            mov pc,dolist
-            dw nameq,qdup,qbranch,interpret1
-            dw cat,dolit,0x80,and
-            dw abortqp
-            db 12,'compile only'
-            dw execute,exit
-interpret1  dw numberq,qbranch,interpret2
-            dw exit
-interpret2  dw error
-
-; $compile ( a -- )
-; Compile next word to dictionary as a token or literal
-            dw _interpret
-_scompile   db 8,'$compile'
-scompile    mov t0,pc+4
-            mov pc,dolist
-            dw nameq,qdup                   ; Defined?
-            dw qbranch,scompile2
-            dw cat,dolit,0x40,and           ; Immediate?
-            dw qbranch,scompile1
-            dw execute,exit                 ; Its immediate, execute
-scompile1   dw comma,exit                   ; Its not immediate, compile
-scompile2   dw numberq                      ; Number?
-            dw qbranch,scompile3     
-            dw literal,exit                 ; Its a number, compile
-scompile3   dw space,count,type,dotqp
-            db 2,' ?'
-            dw quit
-
 ; ] ( -- )
 ; Start compiling the words in the input stream
-            dw _scompile
+            dw _numberq
 _rbracket   db 0x41,']'
 rbracket    mov t0,pc+4
             mov pc,dolist
@@ -1517,41 +1225,10 @@ lbracket    mov t0,pc+4
             mov pc,dolist
             dw dolit,interpret,teval,store,exit
 
-; tib> ( -- F | c T)
-; Return true and the next character from the input buffer or false if the buffer is empty
-            dw _lbracket
-_tibfrom    db 4,'tib>'
-tibfrom     mov t0,pc+4
-            mov pc,dolist
-            dw inn,at,ntib,at,xor,dup,qbranch,tibfrom1  ; Buffer empty?
-            dw tib,inn,at,plus,cat                      ; No, read character
-            dw dolit,1,inn,pstore                       ; Increment parsing pointer
-            dw swap,zequal,not                          ; True flag
-tibfrom1    dw exit                                     
-
-; parse ( c -- b u )
-; Scan input stream and return counted string delimited by c
-
-            dw _tibfrom
-_parse      db 5,'parse'
-parse       mov t0,pc+4
-            mov pc,dolist    
-            dw tor                              ; Save delimiter 
-            dw rat,bl,xor,not,qbranch,parse2    ; Branch if delimiter is not space       
-parse1      dw tibfrom,qbranch,parse2           ; Read next character, branch if buffer is empty
-            dw bl,xor,qbranch,parse1            ; Loop if character is space
-            dw dolit,-1,inn,pstore              ; Backup parsing index to first character after spaces
-parse2      dw inn,at,tib,plus                  ; Address of start of string
-            dw dolit,0                          ; Initialize character count
-parse3      dw tibfrom,qbranch,parse4           ; Read next character, branch if buffer empty
-            dw rat,xor,qbranch,parse4           ; Branch if delimeter
-            dw onep,branch,parse3               ; Increment character count
-parse4      dw rfrom,drop,exit                  ; Remove delimiter from return stack       
-
 ; cmove ( b1 b2 u -- )
 ; Copy u bytes from b1 to b2
 
-            dw _parse
+            dw _lbracket
 _cmove      db 5,'cmove'
 cmove       mov t0,pc+4
             mov pc,dolist
@@ -1563,23 +1240,9 @@ cmove1      dw tor,dup,cat
 cmove2      dw donext,cmove1
             dw ddrop,exit
 
-; pack$ ( b u a -- a )
-; Build a counted string with u characters from b
-
-            dw _cmove
-_packs      db 5,'pack$'
-packs       mov t0,pc+4
-            mov pc,dolist
-            dw dup,tor              ; Save address of word buffer
-            dw ddup,cstore          ; Store the character count first
-            dw onep,ddup,plus       ; Go to the end of the string
-            dw dolit,0,swap,store   ; Fill then end with 0's
-            dw swap,cmove           ; Copy the string
-            dw rfrom,exit           ; Leave only the buffer address
-
 ; word ( c -- a )
 ; Parse a word from the input stream and copy to the dictionary
-            dw _packs
+            dw _cmove
 _word       db 4,'word'
 word        mov t0,pc+4
             mov pc,dolist
@@ -1596,32 +1259,9 @@ atexecute   mov t0,pc+4
             dw execute              ; Execute if not 0
 atexecute1  dw exit
 
-; qstack
-; Abort if the data stack underflows
-            dw _atexecute
-_qstack     db 6,'?stack'
-qstack      mov t0,pc+4
-            mov pc,dolist
-            dw depth,zless              ; Stack depth < 0?
-            dw abortqp
-            db 10,' underflow'
-qstack1     dw exit
-
-; eval ( -- )
-; Interpret the input stream
-            dw _qstack
-_eval       db 4,'eval'
-eval        mov t0,pc+4
-            mov pc,dolist
-eval1       dw bl,word,dup,cat        ; Parse a word
-            dw qbranch,eval2          ; Branch if character count is 0
-            dw teval,atexecute,qstack ; Evaluate and check for stack underflow
-            dw branch,eval1           ; Repeat until word gets a null string
-eval2       dw drop,exit              ; Discard string address and display prompt
-
 ; words ( -- )
 ; List all words in dictionary avoiding splitting words at line breaks
-            dw _eval
+            dw _atexecute
 _words      db 5,'words'
 words       mov t0,pc+4
             mov pc,dolist
@@ -1636,7 +1276,8 @@ words1      dw qdup,qbranch,words2  ; Branch if start of dictionary
             dw drop,cr,dup          ; Yes, start new line and set tracking count to length of word
 words3      dw onep,tor             ; Update tracking count and add one for space
             dw type,space           ; Display word followed by space
-            dw cellm,at,twom        ; Move to next word in dictionary
+            dw dolit,2,sub
+            dw at,twom              ; Move to next word in dictionary
             dw branch,words1        
 words2      dw rfrom,drop,exit      ; Drop tracking count and exit
 
@@ -1702,72 +1343,17 @@ dots2       dw donext,dots1         ; Loop till done
 _comma      db 1,','
 comma       mov t0,pc+4
             mov pc,dolist
-            dw here,dup,cellp
+            dw here,dup,dolit,2,plus
             dw dp,store,store,exit
-
-; ?unique ( a -- a )
-; Display a warning message if the word already exists
-            dw _comma
-_qunique    db 7,'?unique'
-qunique     mov t0,pc+4
-            mov pc,dolist
-            dw dup,nameq
-            dw qbranch,qunique1
-            dw dotqp,
-            db 11,' redefined '
-            dw over,count,type
-qunique1    dw drop,exit
-
-; header ( -- )
-; Create dictionary header from input buffer word. Abort if word is null
-            dw _qunique
-_header     db 6,'header'
-header      mov t0,pc+4
-            mov pc,dolist
-            dw last,at,twod,comma       ; Compile link field             
-            dw here,last,store          ; Set new word as last defined word
-            dw bl,word                  ; Copy word from input buffer to top of dictionary
-            dw dup,cat,zequal,abortqp   ; Abort if string length is null
-            db 5,' name'
-            dw qunique                  ; Display warning if word already exists in dictionary 
-            dw cat,here,plus,onep       ; Add new word string length onto top of dictionary pointer
-            dw dup,dolit,1,and          ; Is dictionary pointer is on a word boundry?
-            dw qbranch,header1
-            dw dolit,0            
-            dw over,cstore,onep         ; No, pad string with null and advance pointer by 1 
-header1     dw dp,store                 ; Store new end of dictionary pointer
-            dw exit                     ; Return true
-
-; compile ( -- )
-; Compile the next address in colon list to the dictionary
-            dw _header
-_compile    db 0x87,'compile'
-compile     mov t0,pc+4
-            mov pc,dolist
-            dw rfrom,dup        ; Get the next word address in the list
-            dw twom,at,comma    ; Convert and compile address 
-            dw onep,tor,exit    ; Adjust return address
-
-; $dolist ( -- )
-; Compile dolist macro
-            dw _compile
-_$dolist    db 0x87,'$dolist'
-$dolist     mov t0,pc+4
-            mov pc,dolist
-            dw dolit,pc+4,comma
-            dw dolit,t0,comma        ; mov t0,pc+4
-            dw dolit,dolist,comma
-            dw dolit,pc,comma        ; mov pc,dolist
-            dw exit
 
 ; create ( -- )
 ; Compile a new array entry without allocating code space
-            dw _$dolist
+            dw _comma
 _create     db 6,'create'
 create      mov t0,pc+4
             mov pc,dolist
             dw header               ; Create dictionary header with link and name fields
-            dw $dolist              ; Compile dolist macro in code field
+            dw ddolist              ; Compile dolist macro in code field
             dw compile,dovar        ; Compile dovar onto word list
             dw overt                ; Link new word into the dictionary
             dw exit
@@ -1788,7 +1374,7 @@ variable    mov t0,pc+4
 _constant   db 8,'constant'
 constant    mov t0,pc+4
             mov pc,dolist
-            dw header,$dolist
+            dw header,ddolist
             dw compile,dolit,comma
             dw compile,exit
             dw overt,exit
@@ -1817,68 +1403,26 @@ dotpr       mov t0,pc+4
             mov pc,dolist
             dw dolit,')',parse,type,exit
 
-; $," ( -- )
-; Compile a literal string up to next "
-            dw _dotpr
-_strcq      db 0x83,'$,"'
-strcq       mov t0,pc+4
-            mov pc,dolist
-            dw dolit,'"',word       ; Move string to dictionary
-            dw count,swap,drop      ; Length of string, discard string address
-            dw here,plus,onep       ; Add count-string length to dictionary pointer
-            dw dup,dolit,1,and      ; Is dictionary pointer on a word boundry?
-            dw qbranch,strcq1
-            dw dolit,0            
-            dw over,cstore,onep     ; No, pad string with null and advance pointer by 1 
-strcq1      dw dp,store,exit        ; Update dictionary pointer
-
-; $"| ( -- a )
-; Run time routine compiled by $". Return address of a compiled string.
-strqp       mov t0,pc+4
-            mov pc,dolist
-            dw dostr,exit
-
 ; $"  ( -- )
 ; Compile an inline string literal.
-            dw _strcq
+            dw _dotpr
 _strq       db 0x42,'$"'
 strq        mov t0,pc+4
             mov pc,dolist
             dw compile,strqp,strcq,exit
 
-; abort"| ( f -- )
-; Run time routine of abort" Abort with a message.
-            dw _strq
-_abortqp    db 0x87,'abort"|'
-abortqp     mov t0,pc+4
-            mov pc,dolist
-            dw qbranch,abortqp1     ; Branch if flag is false
-            dw dostr,count,type     ; Read and display error message
-            dw quit                 ; Restart text interpreter 
-abortqp1    dw dostr,drop,exit      ; Read a drop error message
-
 ; abort" ( f -- )
 ; Compile an inline string literal type at runtime and execute quit if flag is true
-            dw _abortqp
+            dw _strq
 _abortq     db 0xc6,'abort"'
 abortq      mov t0,pc+4
             mov pc,dolist
             dw compile,abortqp
             dw strcq,exit
 
-; error ( a -- )
-; Display error message in buffer at a and execute quit
-            dw _abortq
-_error      db 5,'error'
-error       mov t0,pc+4
-            mov pc,dolist
-            dw space,count,type
-            dw dolit,'?',emit
-            dw quit
-
 ; ." ( -- )
 ; Compile an inline string literal to be typed out at run time
-            dw _error
+            dw _abortq
 _dotq       db 0xc2,'."'
 dotq        mov t0,pc+4
             mov pc,dolist
@@ -1892,7 +1436,7 @@ _colon      db 1,':'
 colon       mov t0,pc+4
             mov pc,dolist
             dw header
-            dw $dolist
+            dw ddolist
             dw rbracket            
             dw exit
 
@@ -1998,33 +1542,9 @@ repeat      mov t0,pc+4
             mov pc,dolist
             dw again,here,twod,swap,store,exit
 
-; .ok ( -- )
-; Display 'ok' only while interpreting
-            dw _repeat
-_dotok      db 3,'.ok'
-dotok       mov t0,pc+4
-            mov pc,dolist
-            dw dolit,interpret
-            dw teval,at,equal
-            dw qbranch,dotok1
-            dw dotqp
-            db 3,' ok'
-dotok1      dw exit
-
-; ahead ( -- a )
-; Compile a forward branch instruction
-            dw _dotok
-_ahead      db 0xc5,'ahead'
-ahead       mov t0,pc+4
-            mov pc,dolist
-            dw compile,branch
-            dw here
-            dw dolit,0,comma
-            dw exit
-
 ; while ( a -- A a )
 ; Conditional branch out of a begin-while-repeat loop
-            dw _ahead
+            dw _repeat
 _while      db 0xc5,'while'
 while       mov t0,pc+4
             mov pc,dolist
@@ -2041,6 +1561,393 @@ quit        mov t0,pc+4
 quit1       dw cr,query,eval          ; Get and evaluate input
             dw dotok                  ; Display 'ok' if not compiling
             dw branch,quit1           ; Continue till error
+
+;
+; Headerless words
+;
+
+; ( -- a )
+; Initialize the return stack pointer
+rpstore     mov rp,rp0
+            mov pc,$next
+
+; ( -- a )
+; Initialize the data stack pointer
+spstore     mov sp,sp0
+            mov pc,$next
+
+; ( -- a )
+; Run time routine for variable and create
+dovar       mov t0,pc+4
+            mov pc,dolist
+            dw rfrom,twom,exit
+
+; ( -- b )
+; Return the address of a compiled string
+dostr       mov t0,pc+4
+            mov pc,dolist
+            dw rfrom,rfrom,twom,dup,count,plus
+            dw onep,twod,tor,swap,tor,exit
+
+; ( n -- char )
+; Convert n to a printable character
+tochar      mov t0,pc+4
+            mov pc,dolist
+            dw dup,dolit,0x7f,bl,within
+            dw qbranch,tochar1
+            dw drop,dolit,'.'
+tochar1     dw exit
+
+; ( -- )
+; Run time routine of ."
+dotqp       mov t0,pc+4
+            mov pc,dolist
+            dw dostr,count,type,exit
+
+; ( -- a )
+; Variable used during construction of numeric output strings
+hld         mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0
+
+; ( u -- c )
+; Convert digit u to a character
+digit       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,9,over,less
+            dw dolit,39,and,plus
+            dw dolit,'0',plus,exit
+
+; ( n base -- n c )
+; Extract the least significant digit from n
+extract     mov t0,pc+4
+            mov pc,dolist
+            dw dolit,0,swap,ummod
+            dw swap,digit,exit
+
+; ( n -- b u )
+; Convert a signed integer to a numeric string
+str         mov t0,pc+4
+            mov pc,dolist
+            dw dup,tor,abs,bdigs,digs,rfrom,sign,edigs,exit
+
+; ( -- n )
+; Return the length of the terminal input buffer
+tibl        mov t0,pc+4
+            mov pc,dolist
+            dw dolit,sp,twom,tib,sub,exit
+
+; ( -- a )
+; Variable used to track the number of characters in the input buffer
+ntib        mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0
+
+; ( bot eot cur -- bot eot cur )
+; Backup the cursor by one character
+bksp        mov t0,pc+4
+            mov pc,dolist
+            dw tor,over,rfrom,swap,over,xor
+            dw qbranch,bksp1
+            dw dolit,8,dup,emit,space,emit
+            dw onem
+bksp1       dw exit
+
+; ( bot eot cur c -- bot eot cur )
+; Accept and echo the key stroke and bump the cursor
+
+tap         mov t0,pc+4
+            mov pc,dolist
+            dw dup,emit,over,cstore,onep,exit
+
+; ( bot eot cur c -- bot eot cur )
+; Process a key stroke, CR or backspace
+ktap        mov t0,pc+4
+            mov pc,dolist
+            dw dup,dolit,13,xor
+            dw qbranch,ktap1
+            dw dolit,8,xor
+            dw qbranch,ktap2
+            dw bl,tap,exit
+ktap1       dw space,drop,swap,drop,dup,exit
+ktap2       dw bksp,exit
+
+; ( -- a )
+; Character pointer while parsing input stream
+inn         mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0
+
+; ( -- a )
+; Execution vector of eval
+teval       mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0
+
+; ( -- a )
+; Pointer to name field of last word in dictionary
+context     mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0
+
+; ( -- a )
+; Pointer to name field of last word in dictionary
+last        mov t0,pc+4
+            mov pc,dolist
+            dw dovar,0
+
+; ( -- )
+; Link a successfully defined word into the dictionary
+overt       mov t0,pc+4
+            mov pc,dolist
+            dw last,at,context,store,exit
+
+; ( c base -- u t )
+; Convert a character to its numeric value. A flag indicates success
+digitq      mov t0,pc+4
+            mov pc,dolist
+            dw tor,dolit,'0',sub
+            dw dolit,9,over,less
+            dw qbranch,digitq1
+            dw dolit,39,sub
+            dw dup,dolit,10,less,or
+digitq1     dw dup,rfrom,uless,exit
+
+; ( na -- ca )
+; Return code address from name address
+cfa         mov t0,pc+4
+            mov pc,dolist
+            dw dup,cat             ; Get length of name and flags
+            dw dolit,0x3f,and      ; Mask flags
+            dw plus                ; Add length to name address
+            dw twod,onep           ; Divide by two and round up
+            dw exit  
+
+; ( a a -- a a F )
+; Compare two strings return true if they match 
+sameq       mov t0,pc+4
+            mov pc,dolist
+            dw over,over
+            dw dup,cat,dolit,0x3F,and,tor   ; Setup for loop with character count
+            dw branch,sameq2                ; Branch for first iteration
+sameq1      dw over,cat,over,cat            ; Get string characters
+            dw equal,qbranch,sameq3         ; Compare, branch if no match
+sameq2      dw onep,swap,onep               ; Increment pointers
+            dw donext,sameq1                ; Next
+            dw ddrop,dolit,-1,exit          ; Strings match, tidy up and return true
+sameq3      dw rfrom,drop                   ; Match failed, cleanup for loop
+            dw ddrop,dolit,0,exit           ; Strings don't match tidy up and return false
+
+; ( a -- ca na | a F )
+; Search dictionary for a string, return code and name field address if found else false
+nameq       mov t0,pc+4
+            mov pc,dolist
+            dw context,at                   ; Last word in dictionary
+nameq1      dw dup,qbranch,nameq2           ; Branch if start of dictionary reached
+            dw over,at,over,at              ; First two cells of strings
+            dw dolit,0x3fff,and             ; Mask dictionary string compile and immediate flags 
+            dw equal,qbranch,nameq3         ; Branch if first cells are not equal
+            dw sameq,qbranch,nameq3         ; Branch if strings don't match
+            dw swap,drop,dup,cfa,swap       ; Name found, drop search string and push code field address
+nameq2      dw exit
+nameq3      dw dolit,2,sub
+            dw at,twom,branch,nameq1        ; Move to next word in dictionary 
+
+; ( w -- )
+; Compile top item to dictionary as an integer literal
+literal     mov t0,pc+4
+            mov pc,dolist
+            dw compile,dolit
+            dw comma,exit
+
+; ( a -- )
+; Interpret a word. If failed, try to convert it to an integer
+interpret   mov t0,pc+4
+            mov pc,dolist
+            dw nameq,qdup,qbranch,interpret1
+            dw cat,dolit,0x80,and
+            dw abortqp
+            db 12,'compile only'
+            dw execute,exit
+interpret1  dw numberq,qbranch,interpret2
+            dw exit
+interpret2  dw error
+
+; ( a -- )
+; Compile next word to dictionary as a token or literal
+scompile    mov t0,pc+4
+            mov pc,dolist
+            dw nameq,qdup                   ; Defined?
+            dw qbranch,scompile2
+            dw cat,dolit,0x40,and           ; Immediate?
+            dw qbranch,scompile1
+            dw execute,exit                 ; Its immediate, execute
+scompile1   dw comma,exit                   ; Its not immediate, compile
+scompile2   dw numberq                      ; Number?
+            dw qbranch,scompile3     
+            dw literal,exit                 ; Its a number, compile
+scompile3   dw space,count,type,dotqp
+            db 2,' ?'
+            dw quit
+
+; ( -- F | c T)
+; Return true and the next character from the input buffer or false if the buffer is empty
+tibfrom     mov t0,pc+4
+            mov pc,dolist
+            dw inn,at,ntib,at,xor,dup,qbranch,tibfrom1  ; Buffer empty?
+            dw tib,inn,at,plus,cat                      ; No, read character
+            dw dolit,1,inn,pstore                       ; Increment parsing pointer
+            dw swap,zequal,not                          ; True flag
+tibfrom1    dw exit 
+
+; ( c -- b u )
+; Scan input stream and return counted string delimited by c
+parse       mov t0,pc+4
+            mov pc,dolist    
+            dw tor                              ; Save delimiter 
+            dw rat,bl,xor,not,qbranch,parse2    ; Branch if delimiter is not space       
+parse1      dw tibfrom,qbranch,parse2           ; Read next character, branch if buffer is empty
+            dw bl,xor,qbranch,parse1            ; Loop if character is space
+            dw dolit,-1,inn,pstore              ; Backup parsing index to first character after spaces
+parse2      dw inn,at,tib,plus                  ; Address of start of string
+            dw dolit,0                          ; Initialize character count
+parse3      dw tibfrom,qbranch,parse4           ; Read next character, branch if buffer empty
+            dw rat,xor,qbranch,parse4           ; Branch if delimeter
+            dw onep,branch,parse3               ; Increment character count
+parse4      dw rfrom,drop,exit                  ; Remove delimiter from return stack  
+
+; ( b u a -- a )
+; Build a counted string with u characters from b
+packs       mov t0,pc+4
+            mov pc,dolist
+            dw dup,tor              ; Save address of word buffer
+            dw ddup,cstore          ; Store the character count first
+            dw onep,ddup,plus       ; Go to the end of the string
+            dw dolit,0,swap,store   ; Fill then end with 0's
+            dw swap,cmove           ; Copy the string
+            dw rfrom,exit           ; Leave only the buffer address
+
+; ( -- )
+; Abort if the data stack underflows
+qstack      mov t0,pc+4
+            mov pc,dolist
+            dw depth,zless              ; Stack depth < 0?
+            dw abortqp
+            db 10,' underflow'
+qstack1     dw exit
+
+; ( -- )
+; Interpret the input stream
+eval        mov t0,pc+4
+            mov pc,dolist
+eval1       dw bl,word,dup,cat        ; Parse a word
+            dw qbranch,eval2          ; Branch if character count is 0
+            dw teval,atexecute,qstack ; Evaluate and check for stack underflow
+            dw branch,eval1           ; Repeat until word gets a null string
+eval2       dw drop,exit              ; Discard string address and display prompt
+
+; ( a -- a )
+; Display a warning message if the word already exists
+qunique     mov t0,pc+4
+            mov pc,dolist
+            dw dup,nameq
+            dw qbranch,qunique1
+            dw dotqp,
+            db 11,' redefined '
+            dw over,count,type
+qunique1    dw drop,exit
+
+; ( -- )
+; Create dictionary header from input buffer word. Abort if word is null
+header      mov t0,pc+4
+            mov pc,dolist
+            dw last,at,twod,comma       ; Compile link field             
+            dw here,last,store          ; Set new word as last defined word
+            dw bl,word                  ; Copy word from input buffer to top of dictionary
+            dw dup,cat,zequal,abortqp   ; Abort if string length is null
+            db 5,' name'
+            dw qunique                  ; Display warning if word already exists in dictionary 
+            dw cat,here,plus,onep       ; Add new word string length onto top of dictionary pointer
+            dw dup,dolit,1,and          ; Is dictionary pointer is on a word boundry?
+            dw qbranch,header1
+            dw dolit,0            
+            dw over,cstore,onep         ; No, pad string with null and advance pointer by 1 
+header1     dw dp,store                 ; Store new end of dictionary pointer
+            dw exit                     ; Return true
+
+; ( -- )
+; Compile the next address in colon list to the dictionary
+compile     mov t0,pc+4
+            mov pc,dolist
+            dw rfrom,dup        ; Get the next word address in the list
+            dw twom,at,comma    ; Convert and compile address 
+            dw onep,tor,exit    ; Adjust return address
+
+; ( -- )
+; Compile dolist macro
+ddolist     mov t0,pc+4
+            mov pc,dolist
+            dw dolit,pc+4,comma
+            dw dolit,t0,comma        ; mov t0,pc+4
+            dw dolit,dolist,comma
+            dw dolit,pc,comma        ; mov pc,dolist
+            dw exit
+
+; ( -- )
+; Compile a literal string up to next "
+strcq       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,'"',word       ; Move string to dictionary
+            dw count,swap,drop      ; Length of string, discard string address
+            dw here,plus,onep       ; Add count-string length to dictionary pointer
+            dw dup,dolit,1,and      ; Is dictionary pointer on a word boundry?
+            dw qbranch,strcq1
+            dw dolit,0            
+            dw over,cstore,onep     ; No, pad string with null and advance pointer by 1 
+strcq1      dw dp,store,exit        ; Update dictionary pointer
+
+; ( -- a )
+; Run time routine compiled by $". Return address of a compiled string.
+strqp       mov t0,pc+4
+            mov pc,dolist
+            dw dostr,exit
+
+; ( f -- )
+; Run time routine of abort" Abort with a message.
+abortqp     mov t0,pc+4
+            mov pc,dolist
+            dw qbranch,abortqp1     ; Branch if flag is false
+            dw dostr,count,type     ; Read and display error message
+            dw quit                 ; Restart text interpreter 
+abortqp1    dw dostr,drop,exit      ; Read a drop error message
+
+; ( a -- )
+; Display error message in buffer at a and execute quit
+error       mov t0,pc+4
+            mov pc,dolist
+            dw space,count,type
+            dw dolit,'?',emit
+            dw quit
+
+; ( -- )
+; Display 'ok' only while interpreting
+dotok       mov t0,pc+4
+            mov pc,dolist
+            dw dolit,interpret
+            dw teval,at,equal
+            dw qbranch,dotok1
+            dw dotqp
+            db 3,' ok'
+dotok1      dw exit
+
+; ( -- a )
+; Compile a forward branch instruction
+ahead       mov t0,pc+4
+            mov pc,dolist
+            dw compile,branch
+            dw here
+            dw dolit,0,comma
+            dw exit
 
 endofdict   dw 0
 
