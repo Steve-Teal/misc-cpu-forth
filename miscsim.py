@@ -45,13 +45,15 @@ class miscsim():
             self.key = ord(msvcrt.getch())
             return self.key
         elif address == 0xffff:
-            return int(msvcrt.kbhit())
+            return not msvcrt.kbhit()
         elif address < self.memorysize:
             return self.memory[address]
         else:
             return 0
 
-    def Write(self,address,data):
+    def Write(self,address,data,recurse):
+        if recurse > 900:
+            return
         if address == 0:
             self.pc = data
         elif address == 1:
@@ -64,7 +66,7 @@ class miscsim():
             if self.carry:
                 self.pc = data # Take branch if carry flag is set
         elif address == 7:
-            self.Write(self.accu,data)
+            self.Write(self.accu,data,recurse+1)
         elif address == 8:
             self.accu = data
         elif address == 9:
@@ -114,7 +116,7 @@ class miscsim():
             dst = self.Read(self.pc+1)
             temp = self.Read(src)
             self.pc += 2
-            self.Write(dst,temp)
+            self.Write(dst,temp,1)
 
 
    
