@@ -16,7 +16,7 @@
 #include<string.h>
 
 #define RAM_SIZE    (32768)
-#define CTRL_C      (3)
+#define ESC         (27)
 
 uint16_t ram[RAM_SIZE];
 uint16_t accu;
@@ -26,18 +26,24 @@ uint16_t cf;
 uint16_t pc;
 uint16_t key;
 
-void loadfile(char *fileName)
+int loadfile(char *fileName)
 {
     FILE *fp;
     int index;
 
     fp = fopen(fileName,"rb");
-    fread(ram,sizeof(uint16_t),RAM_SIZE,fp);
-    fclose(fp);
-    for(index=0;index<RAM_SIZE;index++)
+
+    if(fp)
     {
-        ram[index] = ram[index] >> 8 | ram[index] << 8;
+        fread(ram,sizeof(uint16_t),RAM_SIZE,fp);
+        fclose(fp);
+        for(index=0;index<RAM_SIZE;index++)
+        {
+            ram[index] = ram[index] >> 8 | ram[index] << 8;
+        }
     }
+
+    return (fp != NULL);
 }
 
 uint16_t getkey(void)
@@ -126,31 +132,33 @@ void write(uint16_t address, uint16_t data)
     }
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     uint16_t src;
     uint16_t dst;
     uint16_t temp;
 
-    uint16_t old_pc;
-    int i;
+    if(argc != 2)
+    {
+        printf("Usage: misc <binfile.bin>\n");
+        return 0;
+    }
 
-    //loadfile("kernl-misc-0-7-3.fi");
-    loadfile("out.bin");
+    if(!loadfile(argv[1]))
+    {
+        printf("File: %s not found\n",argv[1]);
+        return 0;
+    }
+
     key = 0;
     pc = 0x10; /* Program counter reset value */
-    
-    while(key != CTRL_C)
-    //for(i=0;i<1000;i++)
-    {
-        old_pc = pc;
+    while(key != ESC)
+    {        
         src = ram[pc];
         dst = ram[pc+1];
         temp = read(src);
         pc+=2;
-        write(dst,temp);
-
-        //printf("PC: %04X : %04X -( %04X )-> %04X ACCU: %04X\n",old_pc,src,temp,dst,accu);
+        write(dst,temp);        
     }
 
     return 0;

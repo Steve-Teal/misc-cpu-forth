@@ -1,0 +1,70 @@
+
+cards is an array of 52 16 bit integers
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+| 15| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
++---+-----------------------+-------------------------------+
+| F |          Order        |             Pile              |
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+UP Card facing upwards
+Order of 
+
+
+
+pilecount   ( p -- n)               Return number of cards in pile n
+deal        ( p n --  )             Deals n cards in pile n
+emptycolumn (   -- p n | n)         Returns number of empty card 'columns' if greater than zero also returns number of firs free pile
+
+
+: getpile 2* cards + 1+ c@ ;
+: pilecount 0 51 for over r@ getpile = if 1+ then next swap drop ;
+: dealcolumns 7 for r@ ?dup if dup deal then next ;
+
+hex  ok
+
+create demon  ok
+here 0 ,  ok
+0 link" Hearts"  ok
+link" Spades"  ok
+link" Diamonds"  ok
+link" Clubs"  ok
+swap !
+
+hex
+: link" here swap , 22 word count swap drop 2/ 1+ 2* dp +! ;
+: <link here 0 , 0 ;
+: link> swap ! ;
+
+create demon 
+    <link 
+    link" Hearts" 
+    link" Spades"  
+    link" Diamonds" 
+    link" Clubs"  
+    link>
+
+create suits
+    <link
+    link" King"
+    link" Queen"
+    link" Jack"
+    link" 10"
+    link" 9"
+    link" 8"
+    link" 7"
+    link" 6"
+    link" 5"
+    link" 4"
+    link" 3"
+    link" 2"
+    link" Ace"
+    link>
+
+
+
+
+
+
+
+

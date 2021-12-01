@@ -25,11 +25,26 @@ def makemif(filename,image,length):
     file.write("DATA_RADIX = HEX;\n")
     file.write("CONTENT\nBEGIN\n")
 
+    # Write data
     for address in range(0,length):
         file.write("{:03X} : {:04X} ;\n".format(address,image[address]))
 
+    # End and close file
     file.write("END\n")
     file.close()
+    print("MIF file {:s} created".format(filename))
+
+def makebin(filename,image,length):
+    try:
+        file = open(filename,'wb')
+    except IOError:
+        print("Failed to open output file {:s}".format(filename))
+        sys.exit()
+    for address in range(0,length):
+        file.write(bytes([image[address]>>8,image[address]&0xff]))
+    file.close()
+    print("BIN file {:s} created".format(filename))
+
 
 if __name__ == "__main__":
 
@@ -67,14 +82,15 @@ if __name__ == "__main__":
     if miffile:
         makemif(miffile,asm.image,asm.memoryindex)
 
-    sim = miscsim.miscsim()
+    # Generate BIN file
+    if binfile:
+        makebin(binfile,asm.image,asm.memoryindex)
 
-    
+    if not (miffile or binfile or lstfile):
 
-    sim.memory = asm.image
-
-    while(len(sim.memory) < 32768):
-        sim.memory.append(0)
-
-    sim.Run()
+        sim = miscsim.miscsim()
+        sim.memory = asm.image
+        while(len(sim.memory) < 32768):
+            sim.memory.append(0)
+        sim.Run()
 
