@@ -29,8 +29,6 @@ rx          equ 0xfffe      ; Receive register
 
             org 0x10
 
-            mov sp,sp0
-            mov rp,rp0
             mov pc,start
 start       dw cold
 
@@ -67,7 +65,6 @@ t3          dw 0
 
 ; ( -- w )
 ; Push an inline literal
-
 dolit       mov a,ip
             mov t0,[a]
             mov a+,#1
@@ -78,9 +75,8 @@ dolit       mov a,ip
             mov [a],t0
             mov pc,dnext
 
-; dolist 
+; ( -- )
 ; Process colon list t0
-
 dolist      dw dolist1
 dolist1     mov a,rp
             mov a+,#1
@@ -95,12 +91,10 @@ dolist2     mov a,ip
 
 ; ( -- )
 ; Execute next word on list        
-
 dnext      dw dolist2    
 
-; donext ( -- )
+; ( -- )
 ; Run time code for the single index loop
-
 donext      mov a,rp            ; RP points to index
             mov a,[a]
             mov a-,#1           ; Decrement index
@@ -121,7 +115,6 @@ donext2     mov a-,#1           ; Decrement RP (remove index from return stack)
 
 ; ( f -- )
 ; Branch if flag is zero
-
 qbranch     mov a,sp
             mov t0,[a]
             mov a+,#1
@@ -138,7 +131,6 @@ qbranch     mov a,sp
 
 ; ( -- )
 ; Branch to an inline address
-
 branch      mov a,ip
             mov ip,[a]      
             mov pc,dnext
@@ -232,7 +224,6 @@ bksp1       dw exit
 
 ; ( bot eot cur c -- bot eot cur )
 ; Accept and echo the key stroke and bump the cursor
-
 tap         mov t0,pc+4
             mov pc,dolist
             dw dup,emit,over,cstore,onep,exit
@@ -1578,7 +1569,6 @@ lbracket    mov t0,pc+4
 
 ; cmove ( b1 b2 u -- )
 ; Copy u bytes from b1 to b2
-
             dw _lbracket
 _cmove      db 5,'cmove'
 cmove       mov t0,pc+4

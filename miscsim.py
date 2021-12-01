@@ -15,7 +15,7 @@ class miscsim():
         self.lastkey = 0
         self.memory = []
         self.memorysize = 32768
-        self.key = 0
+        self.keybuffer = []
 
     def LoadFile(self,file):
         while True:
@@ -42,10 +42,12 @@ class miscsim():
         elif address == 0xfffd:
             return 0
         elif address == 0xfffe:
-            self.key = ord(msvcrt.getch())
-            return self.key
+            if len(self.keybuffer) > 0:
+                return self.keybuffer.pop(0)
+            else:
+                return 0
         elif address == 0xffff:
-            return not msvcrt.kbhit()
+            return (len(self.keybuffer) == 0)
         elif address < self.memorysize:
             return self.memory[address]
         else:
@@ -111,7 +113,14 @@ class miscsim():
 
     def Run(self):
         self.pc = 0x10
-        while self.key != self.CTRL_C:            
+        keypoll = 0
+        key = 0
+        while key != 27:
+            keypoll += 1
+            if keypoll % 10000 == 0:
+                if msvcrt.kbhit():
+                    key = ord(msvcrt.getch())
+                    self.keybuffer.append(key)
             src = self.Read(self.pc)
             dst = self.Read(self.pc+1)
             temp = self.Read(src)
