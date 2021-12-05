@@ -86,11 +86,7 @@ if __name__ == "__main__":
     if binfile:
         makebin(binfile,asm.image,asm.memoryindex)
 
+    # Run simulator if no output files specified
     if not (miffile or binfile or lstfile):
-
-        sim = miscsim.miscsim()
-        sim.memory = asm.image
-        while(len(sim.memory) < 32768):
-            sim.memory.append(0)
-        sim.Run()
+        miscsim.miscsim(asm.image)
 

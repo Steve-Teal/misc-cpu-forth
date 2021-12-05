@@ -6,25 +6,24 @@ import msvcrt
 
 class miscsim():
 
-    CTRL_C = (3)
+    memorysize = 32768
 
-    def __init__(self):
+    def __init__(self,program):
         self.accu = 0        # Accumulator
         self.pc = 16         # Program Counter
         self.carry = False   # Carry Flag
         self.lastkey = 0
-        self.memory = []
-        self.memorysize = 32768
+        self.memory = [0] * self.memorysize
         self.keybuffer = []
 
-    def LoadFile(self,file):
-        while True:
-            word = file.read(2)
-            if len(word) != 2:
-                break
-            self.memory.append((word[0] << 8) + (word[1] & 0xff))
-        while len(self.memory) < self.memorysize:
-            self.memory.append(0)
+        address = 0 
+        for data in program:
+            self.memory[address] = data
+            address += 1
+            if address >= self.memorysize:
+                print("Program image too big")
+                return
+        self.Run();
 
     def Read(self,address):
         if address == 0:
@@ -115,9 +114,9 @@ class miscsim():
         self.pc = 0x10
         keypoll = 0
         key = 0
-        while key != 27:
+        while key != 27: # Loop until Escape key pressed
             keypoll += 1
-            if keypoll % 10000 == 0:
+            if keypoll % 10000 == 0: # Check for kypress every n cycles
                 if msvcrt.kbhit():
                     key = ord(msvcrt.getch())
                     self.keybuffer.append(key)
