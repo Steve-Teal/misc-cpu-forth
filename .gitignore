@@ -61,3 +61,4 @@ max/
 *.cmp
 *.bin
 *.pyc
+*.lst

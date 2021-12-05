@@ -14,8 +14,11 @@ class miscasm(object):
         self.image = [0] * self.memorysize
         self.errorcount = 0
         self.memoryfull = False
-        for line in file:
+        self.listing = []
+        for fileline in file:
             self.linenumber += 1
+            line = fileline
+            address = self.memoryindex
             line = self.expandstrings(line)
             line = self.stripcomments(line)
             tokens = self.lexer(line)
@@ -26,6 +29,7 @@ class miscasm(object):
             if self.memoryfull:
                 self.error("Program exceeds memory size")
                 break
+            self.listing.append((self.linenumber,address,self.memoryindex,fileline))
         if self.errorcount == 0:
             self.resolvereferences()
 
@@ -184,45 +188,4 @@ class miscasm(object):
                 else:
                     self.linenumber = line
                     self.error("Undefined reference to {:s}".format(reference))
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3 or len(sys.argv) > 4:
-        print("Usage: python assembler.py <source file> <output file> [listing file]")
-        sys.exit()
-
-    # Assemble file
-    file = open(sys.argv[1])
-    asm = Assembler(file)
-    file.close()
-
-    # Bail out if we have any errors
-    if asm.errorcount != 0:
-        print("Assembly failed with {:d} errors".format(asm.errorcount))
-        sys.exit()
-
-    # Create output file
-    file = open(sys.argv[2],"wb")
-    for idx in range(asm.memoryindex):
-        word = asm.image[idx]
-        file.write(bytes([word>>8,word&0xff]))
-    file.close()
-    print("Success: output file created {:d} bytes".format(asm.memoryindex<<1))
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
-
-
 
