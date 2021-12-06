@@ -1643,13 +1643,15 @@ dmplus2     dw donext,dmplus1               ; Next
 _dump       db 4,'dump'
 dump        mov t0,pc+4
             mov pc,dolist
-            dw dolit,0x10,max               ; Keep addresses above 0x000F to avoid interfering with CPU
-            dw dolit,0x10,tor               ; Start for loop
-            dw branch,dump2
-dump1       dw cr,dolit,0x10                ; Display row of bytes in 2 digit hex format
+            dw dup,dolit,0x10,uless         ; Add 0x10 to address if address is less than 0x10
+            dw qbranch,dump1                ; ... this is to avoid reading the special CPU registers
+            dw dolit,0x10,plus
+dump1       dw dolit,0x10,tor               ; Start for loop
+            dw branch,dump3
+dump2       dw cr,dolit,0x10                ; Display row of bytes in 2 digit hex format
             dw ddup,dmplus,rot,rot
             dw space,type                   ; Display row ASCII
-dump2       dw donext,dump1                 ; Next
+dump3       dw donext,dump2                 ; Next
             dw drop,exit
 
 ; ' ( -- a )

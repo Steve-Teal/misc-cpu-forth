@@ -142,3 +142,4 @@ if __name__ == "__main__":
     if not (miffile or binfile or lstfile):
         miscsim.miscsim(asm.image)
 
+# end of file
