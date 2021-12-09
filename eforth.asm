@@ -356,7 +356,7 @@ scompile2   dw numberq                      ; Number?
             dw literal,exit                 ; Its a number, compile
 scompile3   dw space,count,type,dotqp
             db 2,' ?'
-            dw quit
+            dw context,at,last,store,quit
 
 ; ( -- F | c T)
 ; Return true and the next character from the input buffer or false if the buffer is empty
@@ -568,20 +568,23 @@ key         mov t0,pc+2         ; Load t0 with address of next instruction
 ; Return true and input character or false if no character received
             dw _key
 _qkey       db 4,'?key'
-qkey        mov a,sp            ; Decrement stack pointer
+qkey        mov a>>,?rx         ; Shift receive empty bit into carry
+            mov pcc,pc+4        ; Skip next instruction if no key pressed
+            mov pc,#qkey2       
+            mov t0,#0           ; No key pressed, False flag
+            mov a,sp            ; Push flag onto stack
+qkey1       mov a-,#1
+            mov sp,a
+            mov [a],t0          
+            mov pc,dnext        ; Execute next word on list
+qkey2       mov a,sp
             mov a-,#1
             mov sp,a
-            mov a,?rx           ; Read receive status 1 = empty, 0 = full  
-            mov a+,#ffff        ; Convert to false 0, true -1 carry will be set if false
-            mov t0,a            
-            mov a,sp            ; Read stack pointer
-            mov pcc,pc+6        ; Skip next 2 instructions if carry set (if rx is false)
-            mov [a],rx          ; Push character onto stack
-            mov a-,#1           ; Decrement stack pointer
-            mov [a],t0          ; Push flag onto stack
-            mov a-,#1
-            mov sp,a            ; Store stack pointer
-            mov pc,dnext
+            mov [a],rx          ; Push key value onto stack
+            mov t0,#ffff        ; True flag
+            mov pc,#qkey1
+#qkey1      dw qkey1
+#qkey2      dw qkey2
 
 ; ! ( w a -- )
 ; Pop the data stack to memory

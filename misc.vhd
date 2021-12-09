@@ -17,18 +17,15 @@ end entity;
 architecture rtl of misc is
 
 type state_type is (T0,T1,T2,T3,T4);
-
 signal state : state_type;
 
 signal address_reg : unsigned(15 downto 0);
 signal data_reg    : unsigned(15 downto 0);
 signal pc          : unsigned(15 downto 0);
 signal accu        : unsigned(15 downto 0);
-
 signal adder_a     : unsigned(15 downto 0);
 signal adder_b     : unsigned(15 downto 0);
 signal adder_out   : unsigned(16 downto 0);
-
 signal data_mux    : unsigned(15 downto 0);
 
 -- Processor flags
@@ -39,12 +36,11 @@ signal cf : std_logic; -- Carry
 
 -- Control
 
-signal dst_pc : std_logic;
+signal dst_pc     : std_logic;
 signal data_valid : std_logic;
-signal carry_in : std_logic;
-signal sub_data_accu : std_logic;
-signal sub_accu_data : std_logic;
-signal internal_address : std_logic;
+signal carry_in   : std_logic;
+signal subtract   : std_logic;
+signal internal   : std_logic;
 
 begin
 	
@@ -106,6 +102,12 @@ begin
 	end process;
 	
 --
+-- Internal address decode
+--
+
+	internal <= '1' when address_reg(15 downto 4) = X"000" else '0';
+	
+--
 -- Program Counter
 --
 
@@ -153,7 +155,7 @@ begin
 -- Adder A input source
 --
 
-	process(state,pc,data_mux,address_reg,data_in(3 downto 0),sub_data_accu)
+	process(state,pc,data_mux,address_reg,data_in(3 downto 0),subtract)
 	begin
 		case state is
 			when T0 =>
@@ -163,7 +165,7 @@ begin
 			when T3 =>
 				adder_a <= pc;
 			when T4 =>
-				if sub_data_accu = '1' then 
+				if subtract = '1' then 
 					adder_a <=  not data_mux;
 				else
 					adder_a <= data_mux;
@@ -175,13 +177,13 @@ begin
 -- Addres B input source
 --
 
-	process(state,adder_b,data_in(3 downto 0),accu,sub_accu_data)
+	process(state,adder_b,data_in(3 downto 0),accu)
 	begin
 		case state is
 			when T0|T1 =>
-				adder_b <= X"0000"; -- (T1) ADDRESS = ADDRESS + 1
+				adder_b <= X"0000"; 
 			when T2 =>
-				adder_b <= X"0000"; -- PC = ADDRESS + 1
+				adder_b <= X"0000"; 
 			when T3 =>
 				case address_reg(1 downto 0) is
 					when "00" => adder_b <= X"FFFE";
@@ -191,20 +193,17 @@ begin
 					when others => adder_b <= X"0000";
 				end case;
 			when T4 =>
-				if sub_accu_data = '1' then 
-					adder_b <= not accu;
-				else
 					adder_b <= accu;
-				end if;
 		end case;
 	end process;
 	
 --
 -- Adder
 --
-
+ 
 	adder_out <= ('0' & adder_a) + ('0' & adder_b) + ((15 downto 1 => '0') & carry_in);
-	carry_in <= '1' when state = T1 or state = T2 or (state = T4 and (sub_data_accu = '1' or sub_accu_data = '1')) else '0';
+	carry_in <= '1' when state = T1 or state = T2 or (state = T4 and subtract = '1') else '0';
+	subtract <= '1' when address_reg(3 downto 0) = X"9" else '0';
 
 --
 -- Accumulator and carry flag
@@ -221,9 +220,9 @@ begin
 					case address_reg is
 						when X"0008" =>
 							accu <= data_mux;
-						when X"0009"|X"000A"|X"000B" =>
+						when X"0009"|X"000B" =>
 							accu <= adder_out(15 downto 0);
-							cf <= adder_out(16) xor (sub_data_accu or sub_accu_data);
+							cf <= adder_out(16) xor subtract;
 						when X"000C" =>
 							accu <= data_mux xor accu;
 						when X"000D" =>
@@ -262,7 +261,7 @@ begin
 -- Bus control
 --
 
-	process(state,internal_address)
+	process(state,internal)
 	begin
 		case state is
 			when T0 =>
@@ -272,24 +271,21 @@ begin
 				rd <= '1';
 				wr <= '0';
 			when T3 =>
-				rd <= not internal_address;
+				rd <= not internal;
 				wr <= '0';
 			when T4 =>
 				rd <= '0';
-				wr <= not internal_address;
+				wr <= not internal;
 		end case;
 	end process;
-				
+					
 --
--- Glue Logic
+-- Data and Address bus
 --
-
-	sub_accu_data <= '1' when address_reg(3 downto 0) = X"A" else '0'; -- subtract accumulator from data
-	sub_data_accu <= '1' when address_reg(3 downto 0) = X"9" else '0'; -- subtract data from accumulator
-	internal_address <= '1' when address_reg(15 downto 4) = X"000" else '0';
+	
 	address <= std_logic_vector(address_reg);
 	data_mux <= data_reg when data_valid = '1' else unsigned(data_in);
-	data_out <= std_logic_vector(data_mux) when state = T4 and internal_address = '0' else X"0000";
+	data_out <= std_logic_vector(data_mux) when state = T4 and internal = '0' else X"0000";
 	
 end rtl;
 
