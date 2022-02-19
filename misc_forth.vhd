@@ -4,13 +4,11 @@ use ieee.numeric_std.all;
 
 entity misc_forth is
 	port (
-		clk12m     : in std_logic;
-		led      : out std_logic_vector(7 downto 0);
-		ain      : inout std_logic_vector(6 downto 0);
-		d        : inout std_logic_vector(14 downto 0);
-		pio : inout std_logic_vector(8 downto 1);
-      user_btn   : in std_logic;
-      bdbus      : inout std_logic_vector(1 downto 0));
+		clk12m : in std_logic;
+		led    : out std_logic_vector(7 downto 0);
+		ain    : inout std_logic_vector(6 downto 0);
+		d      : inout std_logic_vector(14 downto 0);
+      bdbus  : inout std_logic_vector(1 downto 0));
 end misc_forth;
 
 architecture rtl of misc_forth is
@@ -71,17 +69,30 @@ architecture rtl of misc_forth is
 	signal urx         : std_logic;
 	signal data_mux    : std_logic_vector(15 downto 0);
 	signal rx_ready    : std_logic;
+	signal port_a      : std_logic_vector(6 downto 0);
+	signal ddr_a       : std_logic_vector(6 downto 0);
+	signal port_d      : std_logic_vector(14 downto 0);
+	signal ddr_d       : std_logic_vector(14 downto 0);
 	
 begin
 
 
 	
-	led <= led_reg;
+		led <= led_reg;
+		
+		bdbus(1) <= utx;
+		urx <= bdbus(0);
 	
-	bdbus(1) <= utx;
-	urx <= bdbus(0);
-	
+l1:	for i in ain'range generate
+		begin
+			ain(i) <= 'Z' when ddr_a(i) = '0' else port_a(i);
+		end generate;
 
+l2:	for i in d'range generate
+		begin
+			d(i) <= 'Z' when ddr_d(i) = '0' else port_d(i);
+		end generate;
+		
 	
 u1:  misc port map (
 			clock => clk12m,
@@ -124,8 +135,15 @@ u3:  uart port map (
 	process(clk12m)
 	begin
 		if rising_edge(clk12m) then
-			if cpu_wr = '1' and address = X"7FFF" then
-				led_reg <= cpu_data(7 downto 0);
+			if cpu_wr = '1' then
+				case address is
+					when x"7FFB" => port_a <= cpu_data(port_a'range);
+					when x"7FFC" => ddr_a <= cpu_data(ddr_a'range);
+					when x"7FFD" => port_d <= cpu_data(port_d'range);
+					when x"7FFE" => ddr_d <= cpu_data(ddr_d'range);
+					when X"7FFF" => led_reg <= cpu_data(led_reg'range);
+					when others => null;
+				end case;
 			end if;
 		end if;
 	end process;
@@ -134,6 +152,10 @@ u3:  uart port map (
 	with address_reg select data <=
 		(15 downto 1 => '0') & rx_ready when x"FFFF",
 		(15 downto 8 => '0') & uart_data when X"FFFE",		
+		(15 downto 7 => '0') & ain when X"7FFB",
+		(15 downto 7 => '0') & ddr_a when X"7FFC",
+		'0' & d when X"7FFD",
+		'0' & ddr_d when X"7FFE",
 		(15 downto 8 => '0') & led_reg when X"7FFF",
 		data_mux when others;
 	
